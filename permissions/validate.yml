@@ -1,0 +1,338 @@
+schema:
+  !include permissions/schema.perm
+
+relationships:
+  # User Relationships
+  - user:alice#owner@user:alice
+  - user:bob#manager@user:alice
+  - user:charlie#manager@user:bob
+
+  # Organization Core Structure
+  - organization:acme#owner@user:alice
+  - organization:acme#admin@user:bob
+  - organization:acme#member@user:charlie
+  - organization:acme#domain_manager@user:diana
+  - organization:acme#billing_manager@user:eve
+  - organization:acme#user_manager@user:frank
+
+  # Organization Domains
+  - organization_domain:acme.com#organization@organization:acme
+  - organization_domain:acme.com#validator@user:diana
+  - organization_domain:acme.dev#organization@organization:acme
+  - organization_domain:acme.dev#validator@user:alice
+
+  # Multiple Groups
+  - group:engineering#organization@organization:acme
+  - group:engineering#admin@user:grace
+  - group:engineering#manager@user:henry
+  - group:engineering#member@user:ian
+
+  - group:design#organization@organization:acme
+  - group:design#admin@user:julia
+  - group:design#manager@user:kate
+  - group:design#member@user:liam
+
+  # Project Hierarchy
+  - project:alpha#organization@organization:acme
+  - project:alpha#owner@user:alice
+  - project:alpha#contributor@user:bob
+  - project:alpha#contributor@user:charlie
+
+  - project:beta#organization@organization:acme
+  - project:beta#owner@user:bob
+  - project:beta#contributor@user:diana
+
+  # Task Structure
+  - task:task1#organization@organization:acme
+  - task:task1#project@project:alpha
+  - task:task1#assignee@user:charlie
+
+  - task:task2#organization@organization:acme
+  - task:task2#project@project:beta
+  - task:task2#assignee@user:diana
+
+  # Billing Accounts
+  - billing_account:acme-billing#organization@organization:acme
+  - billing_account:acme-billing#manager@user:eve
+
+  # Active Invitations
+  - invitation:invite1#organization@organization:acme
+  - invitation:invite1#inviter@user:alice
+  - invitation:invite1#invitee@user:mike
+
+scenarios:
+  - name: "Organization Owner Permissions"
+    description: "Organization owners have full control"
+    checks:
+      - entity: "organization:acme"
+        subject: "user:alice"
+        assertions:
+          manage_organization: true
+          manage_domains: true
+          manage_billing: true
+          manage_users: true
+          invite_users: true
+          remove_users: true
+          manage_projects: true
+          manage_tasks: true
+          manage_groups: true
+          manage_roles: true
+          manage_permissions: true
+
+  - name: "Organization Admin Permissions"
+    description: "Admins have limited management capabilities"
+    checks:
+      - entity: "organization:acme"
+        subject: "user:bob"
+        assertions:
+          manage_organization: false
+          manage_settings: true
+          manage_users: true
+          manage_projects: true
+          manage_invitations: true
+
+  - name: "Domain Manager Permissions"
+    description: "Domain managers can manage domains"
+    checks:
+      - entity: "organization:acme"
+        subject: "user:diana"
+        assertions:
+          manage_domains: true
+          manage_organization: false
+      - entity: "organization_domain:acme.com"
+        subject: "user:diana"
+        assertions:
+          validate: true
+          manage: true
+
+  - name: "Group Permission Hierarchy"
+    description: "Testing group role inheritance"
+    checks:
+      - entity: "group:engineering"
+        subject: "user:grace"
+        assertions:
+          manage_group: true
+          manage_settings: true
+          manage_members: true
+          is_member: true
+      - entity: "group:engineering"
+        subject: "user:henry"
+        assertions:
+          manage_group: false
+          manage_settings: true
+          manage_members: true
+          is_member: true
+      - entity: "group:engineering"
+        subject: "user:ian"
+        assertions:
+          manage_group: false
+          manage_settings: false
+          manage_members: false
+          is_member: true
+
+  - name: "Project and Task Permissions"
+    description: "Testing project and task access control"
+    checks:
+      - entity: "project:alpha"
+        subject: "user:alice"
+        assertions:
+          manage: true
+      - entity: "project:alpha"
+        subject: "user:bob"
+        assertions:
+          contribute: true
+      - entity: "task:task1"
+        subject: "user:charlie"
+        assertions:
+          update: true
+
+  - name: "Billing Account Access"
+    description: "Testing billing permission inheritance"
+    checks:
+      - entity: "billing_account:acme-billing"
+        subject: "user:eve"
+        assertions:
+          manage: true
+          view: true
+      - entity: "billing_account:acme-billing"
+        subject: "user:charlie"
+        assertions:
+          manage: false
+          view: false
+
+  - name: "Invitation Management"
+    description: "Testing invitation creation permissions"
+    checks:
+      - entity: "invitation:invite1"
+        subject: "user:alice"
+        assertions:
+          create: true
+          cancel: true
+      - entity: "invitation:invite1"
+        subject: "user:bob"
+        assertions:
+          create: true
+          cancel: true
+      - entity: "invitation:invite1"
+        subject: "user:frank"
+        assertions:
+          create: true
+          cancel: true          
+      - entity: "invitation:invite1"
+        subject: "user:charlie"
+        assertions:
+          create: false
+          cancel: false
+
+  - name: "User Profile Management"
+    description: "Testing user-level permission management"
+    checks:
+      - entity: "user:alice"
+        subject: "user:alice"
+        assertions:
+          manage_profile: true
+          view_profile: true
+      - entity: "user:bob"
+        subject: "user:alice"
+        assertions:
+          manage_profile: false
+          view_profile: true
+      - entity: "user:charlie"
+        subject: "user:bob"
+        assertions:
+          manage_profile: false
+          view_profile: true
+
+  - name: "Multiple Organization Domains"
+    description: "Testing domain validation across multiple domains"
+    checks:
+      - entity: "organization_domain:acme.com"
+        subject: "user:diana"
+        assertions:
+          validate: true
+          manage: true
+      - entity: "organization_domain:acme.dev"
+        subject: "user:diana"
+        assertions:
+          validate: true
+          manage: true
+      - entity: "organization_domain:acme.com"
+        subject: "user:alice"
+        assertions:
+          validate: true
+          manage: true
+
+  - name: "Cross-Group Access Control"
+    description: "Testing permission boundaries between groups"
+    checks:
+      - entity: "group:engineering"
+        subject: "user:julia"
+        assertions:
+          manage_group: false
+          manage_settings: false
+      - entity: "group:design"
+        subject: "user:grace"
+        assertions:
+          manage_group: false
+          manage_settings: false
+      - entity: "group:design"
+        subject: "user:alice"
+        assertions:
+          manage_group: true
+          manage_settings: true
+
+  - name: "Project Ownership and Contribution"
+    description: "Testing project access patterns"
+    checks:
+      - entity: "project:alpha"
+        subject: "user:alice"
+        assertions:
+          manage: true
+          contribute: true
+      - entity: "project:beta"
+        subject: "user:bob"
+        assertions:
+          manage: true
+          contribute: true
+      - entity: "project:alpha"
+        subject: "user:charlie"
+        assertions:
+          manage: false
+          contribute: true
+
+  - name: "Task Assignment and Project Context"
+    description: "Testing task permissions in project context"
+    checks:
+      - entity: "task:task1"
+        subject: "user:alice"
+        assertions:
+          manage: true
+          update: true
+      - entity: "task:task2"
+        subject: "user:bob"
+        assertions:
+          manage: true
+          update: true
+      - entity: "task:task1"
+        subject: "user:charlie"
+        assertions:
+          manage: false
+          update: true
+
+  - name: "Organization-wide Permission Inheritance"
+    description: "Testing permission inheritance across different entity types"
+    checks:
+      - entity: "organization:acme"
+        subject: "user:alice"
+        assertions:
+          manage_organization: true
+      - entity: "group:engineering"
+        subject: "user:alice"
+        assertions:
+          manage_group: true
+      - entity: "project:alpha"
+        subject: "user:alice"
+        assertions:
+          manage: true
+      - entity: "task:task1"
+        subject: "user:alice"
+        assertions:
+          manage: true
+
+  - name: "Billing Account Complex Scenarios"
+    description: "Testing billing permission inheritance and delegation"
+    checks:
+      - entity: "billing_account:acme-billing"
+        subject: "user:alice"
+        assertions:
+          manage: true
+          view: true
+      - entity: "billing_account:acme-billing"
+        subject: "user:eve"
+        assertions:
+          manage: true
+          view: true
+      - entity: "billing_account:acme-billing"
+        subject: "user:bob"
+        assertions:
+          manage: false
+          view: false
+
+  - name: "Invitation System Edge Cases"
+    description: "Testing invitation system permissions"
+    checks:
+      - entity: "invitation:invite1"
+        subject: "user:alice"
+        assertions:
+          create: true
+          cancel: true
+      - entity: "invitation:invite1"
+        subject: "user:frank"
+        assertions:
+          create: true
+          cancel: true
+      - entity: "invitation:invite1"
+        subject: "user:mike"
+        assertions:
+          create: false
+          cancel: true

@@ -1,0 +1,257 @@
+// This is an example schema file for the permify parser
+// The key difference is that inline comments should appear on lines by themselves
+// or at the beginning of logical blocks, not directly after expressions
+
+// User entity handles basic profile management and user-to-user relationships
+entity user {
+    // Core user relationships defining ownership and management hierarchy
+    
+    // Self-referential ownership of user profile
+    relation owner @user
+    
+    // Enables delegation of user profile viewing rights
+    relation manager @user
+    
+    // Basic user-level permissions for profile management
+    
+    // Only profile owner can make changes
+    permission manage_profile = owner
+    
+    // Both owner and assigned managers can view
+    permission view_profile = owner or manager
+}
+
+entity notification {
+    // Core notification relationships
+    
+    // Links notification to parent user
+    relation user @user
+    
+    // Notification-specific permissions
+    
+    // User can view their own notifications
+    permission view = user
+    
+    // User can mark notifications as read
+    permission mark_read = user
+}
+
+// Organization represents the top-level entity containing all resource relationships
+entity organization {
+    // Core organizational roles establishing the primary access hierarchy
+    
+    // Has complete control over the organization
+    relation owner @user
+    
+    // Basic membership without special privileges
+    relation member @user
+    
+    // Administrative access with broad but limited rights
+    relation admin @user
+    
+    // Specialized management roles for specific organizational functions
+    
+    // Manages domain validation and settings
+    relation domain_manager @user
+    
+    // Handles financial aspects and billing access
+    relation billing_manager @user
+    
+    // Manages user-related operations and access
+    relation user_manager @user
+    
+    // Organization-level permissions defining the core access structure
+    
+    // Complete organizational control
+    permission manage_organization = owner
+    
+    // Settings management for admins and owners
+    permission manage_settings = owner or admin
+    
+    // Domain and billing permission definitions
+    
+    // Domain-specific management rights
+    permission manage_domains = owner or domain_manager
+    
+    // Financial management access
+    permission manage_billing = owner or billing_manager
+    
+    // User management permissions with role-based inheritance
+    
+    // User management hierarchy
+    permission manage_users = owner or user_manager or admin
+    
+    // Invitation privileges
+    permission invite_users = owner or user_manager or admin
+    
+    // User removal rights
+    permission remove_users = owner or user_manager or admin
+    
+    // Resource management permissions for organizational assets
+    
+    // Project-level management
+    permission manage_projects = owner or admin
+    
+    // Task-level management
+    permission manage_tasks = owner or admin
+    
+    // Group management rights
+    permission manage_groups = owner or admin
+    
+    // High-level access control permissions
+    
+    // Role management restricted to owners
+    permission manage_roles = owner
+    
+    // Permission management restricted to owners
+    permission manage_permissions = owner
+    
+    // Membership control permissions
+    
+    // Invitation management rights
+    permission manage_invitations = owner or admin
+}
+
+// Organization domains handle external domain validation and management
+entity organization_domain {
+    // Core domain relationships
+    
+    // Links domain to parent organization
+    relation organization @organization
+    
+    // Assigns validation rights to specific users
+    relation validator @user
+    
+    // Domain-specific permissions
+    
+    // Validation rights hierarchy
+    permission validate = validator or organization.owner or organization.domain_manager
+    
+    // Management rights mirror validation capabilities
+    permission manage = validate
+}
+
+// Groups provide mid-level organizational structure with their own permission hierarchy
+entity group {
+    // Core group relationship to parent organization
+    
+    // Links group to parent organization
+    relation organization @organization
+    
+    // Group-level role hierarchy
+    
+    // Group administrator with full group control
+    relation admin @user
+    
+    // Group manager with limited administrative rights
+    relation manager @user
+    
+    // Basic group member with access rights
+    relation member @user
+    
+    // Group-level permission structure
+    
+    // Complete group management rights
+    permission manage_group = admin or organization.owner
+    
+    // Settings management hierarchy
+    permission manage_settings = admin or manager or organization.owner
+    
+    // Member management capabilities
+    permission manage_members = admin or manager
+    
+    // Resource access rights
+    permission access_resources = admin or manager or member
+    
+    // Role-based permission inheritance
+    
+    // Defines group membership status
+    permission is_member = admin or manager or member
+}
+
+// Projects represent organizational initiatives with their own access controls
+entity project {
+    // Core project relationships
+    
+    // Links project to parent organization
+    relation organization @organization
+    
+    // Project ownership assignment
+    relation owner @user
+    
+    // Project contributor rights
+    relation contributor @user
+    
+    // Project-level permissions
+    
+    // Management rights hierarchy
+    permission manage = owner or organization.manage_projects
+
+    // User manager
+    permission manage_users = owner or organization.manage_projects or organization.manage_users
+
+    permission view = owner or contributor or manage
+}
+
+// Tasks represent individual work items within projects
+entity task {
+    // Core task relationships
+    
+    // Links task to parent organization
+    relation organization @organization
+    
+    // Links task to parent project
+    relation project @project
+    
+    // Task assignment relationship
+    relation assignee @user
+    
+    // Task-level permissions
+    
+    // Management rights hierarchy
+    permission manage = organization.manage_tasks or project.manage
+    
+    // Update rights inheritance
+    permission update = assignee or manage
+}
+
+// Billing accounts handle financial aspects of the organization
+entity billing_account {
+    // Core billing relationships
+    
+    // Links account to parent organization
+    relation organization @organization
+    
+    // Assigns billing management rights
+    relation manager @user
+    
+    // Billing-specific permissions
+    
+    // Management rights with org-level check
+    permission manage = (manager and organization.manage_billing) or organization.owner
+    
+    // Viewing rights hierarchy
+    permission view = organization.manage_billing or organization.owner
+}
+
+// Invitations handle user addition to the organization
+entity invitation {
+    // Core invitation relationships
+    
+    // Links invitation to parent organization
+    relation organization @organization
+    
+    // Tracks who created the invitation
+    relation inviter @user
+    
+    // Tracks intended recipient
+    relation invitee @user
+    
+    // Invitation-specific permissions
+    
+    // Creation rights
+    permission create = organization.owner or organization.admin or organization.user_manager
+    
+    // Cancellation rights
+    permission cancel = inviter or invitee or create
+}

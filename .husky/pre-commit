@@ -1,0 +1,51 @@
+GIT_SECRETS_PATH=$(which git-secrets)
+
+# Section for git-secrets
+if [ ! -x "$GIT_SECRETS_PATH" ]
+# if ! command -v git-secrets &> /dev/null
+then
+   echo "git-secrets is not installed. Please run 'brew install git-secrets' or visit https://github.com/awslabs/git-secrets#installing-git-secrets"
+   exit 1
+fi
+
+# Initialise git-secrets configuration for AWS
+git-secrets --register-aws > /dev/null
+
+
+# Custom REGEX patterns Array to check for various custom secrets
+patterns="SG.[0-9a-zA-Z]{66} sk_live_[0-9a-zA-Z]{99} [0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com (-){5}\s*(BEGIN\sRSA\sPRIVATE\sKEY)\s*(-){5}"
+
+# Log file path
+log_file="git_secrets.log"
+
+# Function to add a pattern if it does not already exist
+add_pattern_if_not_exists() {
+ pattern="$1"
+ existing_patterns=$(git secrets --list 2>>"$log_file")
+echo "pattern===" $pattern
+ if echo "$existing_patterns" | grep -Fqe "$pattern"; then
+   echo "Pattern '$pattern' already exists. No need to add."
+ else
+   echo "Pattern '$pattern' not found. Adding pattern..."
+   git secrets --add "$pattern" 2>>"$log_file"
+   if [ $? -eq 0 ]; then
+     echo "Pattern '$pattern' added successfully."
+   else
+     echo "Failed to add pattern '$pattern'."
+     exit 1
+   fi
+ fi
+}
+
+# Iterate over the space-separated list of patterns and add them if they don't exist
+for pattern in $patterns; do
+ add_pattern_if_not_exists "$pattern"
+done
+
+
+echo "Running git-secrets..."
+# This command will scan whole codebase and will report any sensitive information where pattern is matched.
+git-secrets --scan -r
+
+# Scans only the files that are about to be committed.
+# git-secrets --pre_commit_hook -- "$@"

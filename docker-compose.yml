@@ -1,0 +1,147 @@
+services:
+
+  # router:
+  #   env_file: .env
+  #   image: nginx:latest
+  #   restart: always
+  #   volumes:
+  #     - ./_infra/dev/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./_infra/dev/nginx/ssl.conf:/etc/nginx/ssl.conf:ro
+  #     - ./_infra/dev/dhparam.pem:/etc/nginx/dhparam.pem:ro
+  #     - ./_infra/dev/certificate:/etc/nginx/certs:ro
+  #   ports:
+  #     - 80:80
+  #     - 443:443
+  #   links:
+  #     - marketing
+  #     - app
+  #     - api
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+  #   networks:
+  #     - intranet  
+
+  # api:
+  #   # env_file: .env
+  #   build:
+  #     context: ./
+  #     dockerfile: _infra/dev/golang.dockerfile
+  #     args:
+  #       - BUILD_ENV=dev
+  #       - DOCKER_DEV=true
+  #       - PORT=4000
+  #   ports:
+  #     - 4000:4000      
+  #   environment:
+  #     - DSN="postgres://${DB_USER}:${DB_PASSWORD}@database:5432/${DB_NAME}?sslmode=disable"
+  #     - REDIS_ADDR=cache:6379
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #     - PORT=4000
+  #   volumes:
+  #     - ./:/app
+  #     - ./config.json:/config.json:ro
+  #   links:
+  #     - database
+  #     - cache
+  #   tty: true
+  #   depends_on:
+  #     # kratos:
+  #     #   condition: service_healthy
+  #     database:
+  #       condition: service_healthy
+  #   command: ["air", "-c", "_infra/dev/air.toml", "--build.bin", "/api", "--build.cmd", "go build -tags dev -o /api ./cmd/app/..."]
+  #   networks:
+  #     - intranet
+
+  # marketing:
+  #   env_file: .env
+  #   build:
+  #     context: .
+  #     dockerfile: _infra/dev/web.dockerfile
+  #     args:
+  #       BUILD_ENV: dev
+  #   environment:
+  #     - CHOKIDAR_USEPOLLING=true
+  #     - VITE_BUILD_TIME=FDFFDDF
+  #     - VITE_URL=https://www.rocketbox.dev
+  #     - VITE_API_URL=https://app.rocketbox.dev
+  #   ports:
+  #     - "3000:3000"
+  #   command: ["yarn", "vite", "dev", "--mode", "marketing", "--host", "0.0.0.0", "--port", "3000", "--force"]
+  #   volumes:
+  #     - ./web:/app/web
+  #     - node_modules:/app/web/node_modules
+  #   networks:
+  #     - intranet
+
+  # app:
+  #   env_file: .env
+  #   build:
+  #     context: .
+  #     dockerfile: _infra/dev/web.dockerfile
+  #     args:
+  #       BUILD_ENV: dev
+  #   environment:
+  #     - CHOKIDAR_USEPOLLING=true
+  #     - VITE_BUILD_TIME=FDFFDDF
+  #     - VITE_URL=https://app.rocketbox.dev
+  #     - VITE_API_URL=https://app.rocketbox.dev
+  #   command: ["yarn", "vite", "dev", "--mode", "app", "--host", "0.0.0.0", "--port", "3100", "--force"]     
+  #   ports:
+  #     - "3100:3000"
+  #   volumes:
+  #     - ./web:/app/web
+  #     - node_modules:/app/web/node_modules
+  #   networks:
+  #     - intranet
+
+  database:
+    image: postgres:16-alpine
+    restart: always
+    volumes:
+      - ./scripts/create-multiple-databases.sh:/docker-entrypoint-initdb.d/create-multiple-databases.sh:ro
+      - postgres:/var/lib/postgresql/data
+    ports:
+      - 5433:5432
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_MULTIPLE_DATABASES=${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+    networks:
+      - intranet
+
+  # cache:
+  #   image: redis:latest
+  #   restart: always
+  #   environment:
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #   ports:
+  #     - '6379:6379'
+  #   command: redis-server --save 20 1 --requirepass ${REDIS_PASSWORD}
+  #   volumes: 
+  #     - cache:/data'
+  #   networks:
+  #     - intranet
+
+#   mailslurper:
+#     image: oryd/mailslurper:latest-smtps
+#     ports:
+#       - '4436:4436'
+#       - '4437:4437'
+#     networks:
+#       - intranet
+
+volumes:
+  postgres:
+  node_modules:
+  cache:
+    driver: local
+
+networks:
+  intranet:
