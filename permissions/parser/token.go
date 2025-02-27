@@ -25,10 +25,13 @@ const (
 	TokenEntity
 	TokenRelation
 	TokenPermission
+	TokenAttribute
 
 	// Operators and delimiters
 	TokenLBrace    // {
 	TokenRBrace    // }
+	TokenLBracket  // [
+	TokenRBracket  // ]
 	TokenAt        // @
 	TokenEquals    // =
 	TokenOr        // or
@@ -44,6 +47,7 @@ var Keywords = map[string]TokenType{
 	"entity":     TokenEntity,
 	"relation":   TokenRelation,
 	"permission": TokenPermission,
+	"attribute":  TokenAttribute,
 	"or":         TokenOr,
 	"and":        TokenAnd,
 }

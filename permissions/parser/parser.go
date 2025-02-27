@@ -79,7 +79,7 @@ func (p *Parser) parseEntity() *model.Entity {
 
 	p.nextToken() // Move past the opening brace
 
-	// Parse relations and permissions
+	// Parse relations, permissions, and attributes
 	for p.curToken.Type != TokenRBrace && p.curToken.Type != TokenEOF {
 		if p.curToken.Type == TokenRelation {
 			relation := p.parseRelation()
@@ -90,6 +90,11 @@ func (p *Parser) parseEntity() *model.Entity {
 			permission := p.parsePermission()
 			if permission != nil {
 				entity.Permissions = append(entity.Permissions, *permission)
+			}
+		} else if p.curToken.Type == TokenAttribute {
+			attribute := p.parseAttribute()
+			if attribute != nil {
+				entity.Attributes = append(entity.Attributes, *attribute)
 			}
 		} else {
 			// Skip unexpected tokens within entity body
@@ -132,6 +137,7 @@ func (p *Parser) parseRelation() *model.Relation {
 	// Consume any tokens until we reach a new statement or the end of the entity
 	for p.peekToken.Type != TokenRelation &&
 		p.peekToken.Type != TokenPermission &&
+		p.peekToken.Type != TokenAttribute &&
 		p.peekToken.Type != TokenRBrace &&
 		p.peekToken.Type != TokenEOF {
 		p.nextToken()
@@ -172,6 +178,7 @@ func (p *Parser) parsePermission() *model.Permission {
 		// Consume any tokens until we reach a new statement or the end of the entity
 		for p.peekToken.Type != TokenRelation &&
 			p.peekToken.Type != TokenPermission &&
+			p.peekToken.Type != TokenAttribute &&
 			p.peekToken.Type != TokenRBrace &&
 			p.peekToken.Type != TokenEOF {
 			p.nextToken()
@@ -186,12 +193,71 @@ func (p *Parser) parsePermission() *model.Permission {
 	// If we couldn't parse an expression, skip to the next statement
 	for p.curToken.Type != TokenRelation &&
 		p.curToken.Type != TokenPermission &&
+		p.curToken.Type != TokenAttribute &&
 		p.curToken.Type != TokenRBrace &&
 		p.curToken.Type != TokenEOF {
 		p.nextToken()
 	}
 
 	return nil
+}
+
+// parseAttribute parses an attribute declaration
+func (p *Parser) parseAttribute() *model.Attribute {
+	startLine := p.curToken.Line
+
+	// "attribute" keyword is already consumed
+	if !p.expectPeek(TokenIdent) {
+		return nil
+	}
+
+	attributeName := p.curToken.Literal
+
+	if !p.expectPeek(TokenIdent) {
+		return nil
+	}
+
+	// The token after attribute name should be the data type
+	dataTypeStr := p.curToken.Literal
+	
+	// Check if the next token is [ for array types
+	if p.peekTokenIs(TokenLBracket) {
+		p.nextToken() // consume [
+		
+		// Expect ]
+		if !p.expectPeek(TokenRBracket) {
+			p.addError("expected ']' after '['")
+			return nil
+		}
+		
+		// Modify dataTypeStr to include the array suffix
+		dataTypeStr += "[]"
+	}
+	
+	if !model.IsValidAttributeDataType(dataTypeStr) {
+		p.addError(fmt.Sprintf("invalid attribute data type: %s", dataTypeStr))
+		return nil
+	}
+
+	attribute := &model.Attribute{
+		Name:       attributeName,
+		DataType:   model.AttributeDataType(dataTypeStr),
+		LineNumber: startLine,
+	}
+
+	// Consume any tokens until we reach a new statement or the end of the entity
+	for p.peekToken.Type != TokenRelation &&
+		p.peekToken.Type != TokenPermission &&
+		p.peekToken.Type != TokenAttribute &&
+		p.peekToken.Type != TokenRBrace &&
+		p.peekToken.Type != TokenEOF {
+		p.nextToken()
+	}
+
+	// Move to the next token to prepare for the next statement
+	p.nextToken()
+
+	return attribute
 }
 
 // parseExpression parses a permission expression

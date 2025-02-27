@@ -12,6 +12,20 @@ entity user {
     // Enables delegation of user profile viewing rights
     relation manager @user
     
+    // User attributes for conditional permissions and data validation
+    
+    // Boolean attribute indicating if user account is verified
+    attribute is_verified boolean
+    
+    // Email domain of the user for domain-based permissions
+    attribute email_domain string
+    
+    // User's roles in the system 
+    attribute roles string[]
+    
+    // User's numeric ID for reference
+    attribute user_id integer
+    
     // Basic user-level permissions for profile management
     
     // Only profile owner can make changes
@@ -59,6 +73,32 @@ entity organization {
     
     // Manages user-related operations and access
     relation user_manager @user
+    
+    // Organization attributes for data validation and policy enforcement
+    
+    // Whether the organization has completed onboarding
+    attribute onboarded boolean
+    
+    // Whether the organization is on a premium plan
+    attribute premium boolean
+    
+    // Maximum number of users allowed based on subscription
+    attribute max_users integer
+    
+    // Allowed domain list for automatic user verification
+    attribute allowed_domains string[]
+    
+    // Feature flags to enable/disable organization features
+    attribute features string[]
+    
+    // Geo regions where organization data is stored
+    attribute regions string[]
+    
+    // Quality score between 0.0 and 1.0
+    attribute quality_score double
+    
+    // Performance metrics history
+    attribute performance_history double[]
     
     // Organization-level permissions defining the core access structure
     

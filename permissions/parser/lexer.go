@@ -71,6 +71,10 @@ func (l *Lexer) NextToken() Token {
 		tok = Token{Type: TokenLBrace, Literal: string(l.ch), Line: l.line, Column: l.column}
 	case '}':
 		tok = Token{Type: TokenRBrace, Literal: string(l.ch), Line: l.line, Column: l.column}
+	case '[':
+		tok = Token{Type: TokenLBracket, Literal: string(l.ch), Line: l.line, Column: l.column}
+	case ']':
+		tok = Token{Type: TokenRBracket, Literal: string(l.ch), Line: l.line, Column: l.column}
 	case '@':
 		tok = Token{Type: TokenAt, Literal: string(l.ch), Line: l.line, Column: l.column}
 	case '=':
