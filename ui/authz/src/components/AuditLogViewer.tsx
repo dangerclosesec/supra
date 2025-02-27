@@ -235,7 +235,7 @@ export default function AuditLogViewer() {
               variant="outline"
               size="sm"
               onClick={fetchLogs}
-              className="border-slate-700 hover:bg-slate-800"
+              className="border-border/60 hover:bg-secondary/70"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -343,12 +343,7 @@ export default function AuditLogViewer() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={resetFilters}
-                className="border-slate-700 hover:bg-slate-800"
-              >
+              <Button variant="destructive" size="sm" onClick={resetFilters}>
                 Reset Filters
               </Button>
             </div>
@@ -513,21 +508,21 @@ export default function AuditLogViewer() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">ID</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40">
                     {selectedLog.id}
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">Timestamp</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40">
                     {new Date(selectedLog.timestamp).toLocaleString()}
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">Action Type</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40">
                     <Badge
                       className={`px-2 py-1 border ${getActionBadgeColor(
                         selectedLog.action_type
@@ -540,7 +535,7 @@ export default function AuditLogViewer() {
 
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">Result</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40">
                     {selectedLog.result !== undefined ? (
                       <Badge
                         className={`px-2 py-0.5 border ${getResultBadgeColor(
@@ -557,7 +552,7 @@ export default function AuditLogViewer() {
 
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">Entity</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40">
                     <span className="text-violet-400">
                       {selectedLog.entity_type}
                     </span>
@@ -569,7 +564,7 @@ export default function AuditLogViewer() {
 
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">Subject</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40">
                     {selectedLog.subject_type && selectedLog.subject_id ? (
                       <>
                         <span className="text-violet-400">
@@ -588,7 +583,7 @@ export default function AuditLogViewer() {
                 {selectedLog.relation && (
                   <div className="space-y-2">
                     <label className="text-xs text-gray-400">Relation</label>
-                    <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40">
+                    <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40">
                       {selectedLog.relation}
                     </div>
                   </div>
@@ -597,7 +592,7 @@ export default function AuditLogViewer() {
                 {selectedLog.permission && (
                   <div className="space-y-2">
                     <label className="text-xs text-gray-400">Permission</label>
-                    <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40">
+                    <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40">
                       {selectedLog.permission}
                     </div>
                   </div>
@@ -608,7 +603,7 @@ export default function AuditLogViewer() {
                 Object.keys(selectedLog.context).length > 0 && (
                   <div className="space-y-2">
                     <label className="text-xs text-gray-400">Context</label>
-                    <pre className="text-xs bg-slate-800/50 p-3 rounded-md border border-slate-700/40 overflow-auto whitespace-pre-wrap max-h-60">
+                    <pre className="text-xs bg-[#2a2a3c] p-3 rounded-md border border-slate-700/40 overflow-auto whitespace-pre-wrap max-h-60">
                       {JSON.stringify(selectedLog.context, null, 2)}
                     </pre>
                   </div>
@@ -617,21 +612,21 @@ export default function AuditLogViewer() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">Request ID</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40 truncate">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40 truncate">
                     {selectedLog.request_id || "N/A"}
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">Client IP</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40 truncate">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40 truncate">
                     {selectedLog.client_ip || "N/A"}
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400">User Agent</label>
-                  <div className="text-sm bg-slate-800/50 p-2 rounded-md border border-slate-700/40 truncate">
+                  <div className="text-sm bg-[#2a2a3c] p-2 rounded-md border border-slate-700/40 truncate">
                     {selectedLog.user_agent || "N/A"}
                   </div>
                 </div>

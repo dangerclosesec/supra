@@ -1,5 +1,63 @@
 
 @import 'tailwindcss';
+:root {
+  --primary: rgb(34, 197, 94); /* Example RGB value for primary color */
+  --primary-foreground: 255, 255, 255; /* Example RGB value for primary foreground color */
+  
+  
+  --secondary: 59, 130, 246; /* Example RGB value for secondary color */
+  --secondary-foreground: 255, 255, 255; /* Example RGB value for secondary foreground color */
+  
+  --destructive: 239, 68, 68; /* Example RGB value for destructive color */
+  --destructive-foreground: 255, 255, 255; /* Example RGB value for destructive foreground color */
+  
+  --border: 229, 231, 235; /* Example RGB value for border color */
+  --input: 243, 244, 246; /* Example RGB value for input color */
+  --ring: 191, 219, 254; /* Example RGB value for ring color */
+  --background: 255, 255, 255; /* Example RGB value for background color */
+  --foreground: 17, 24, 39; /* Example RGB value for foreground color */
+  
+  --muted: 107, 114, 128; /* Example RGB value for muted color */
+  --muted-foreground: 255, 255, 255; /* Example RGB value for muted foreground color */
+  
+  --accent: 16, 185, 129; /* Example RGB value for accent color */
+  --accent-foreground: 255, 255, 255; /* Example RGB value for accent foreground color */
+  
+  --popover: 255, 255, 255; /* Example RGB value for popover color */
+  --popover-foreground: 17, 24, 39; /* Example RGB value for popover foreground color */
+  
+  --card: 255, 255, 255; /* Example RGB value for card color */
+  --card-foreground: 17, 24, 39; /* Example RGB value for card foreground color */
+}
+
+.dark {
+  --primary: rgb(139, 92, 246); /* Example RGB value for primary color in dark mode */
+  --primary-foreground: 255, 255, 255; /* Example RGB value for primary foreground color in dark mode */
+  
+  --secondary: 59, 130, 246; /* Example RGB value for secondary color in dark mode */
+  --secondary-foreground: 255, 255, 255; /* Example RGB value for secondary foreground color in dark mode */
+  
+  --destructive: 239, 68, 68; /* Example RGB value for destructive color in dark mode */
+  --destructive-foreground: 255, 255, 255; /* Example RGB value for destructive foreground color in dark mode */
+  
+  --border: 75, 85, 99; /* Example RGB value for border color in dark mode */
+  --input: 55, 65, 81; /* Example RGB value for input color in dark mode */
+  --ring: 191, 219, 254; /* Example RGB value for ring color in dark mode */
+  --background: 17, 24, 39; /* Example RGB value for background color in dark mode */
+  --foreground: 243, 244, 246; /* Example RGB value for foreground color in dark mode */
+  
+  --muted: 107, 114, 128; /* Example RGB value for muted color in dark mode */
+  --muted-foreground: 255, 255, 255; /* Example RGB value for muted foreground color in dark mode */
+  
+  --accent: 16, 185, 129; /* Example RGB value for accent color in dark mode */
+  --accent-foreground: 255, 255, 255; /* Example RGB value for accent foreground color in dark mode */
+  
+  --popover: 31, 41, 55; /* Example RGB value for popover color in dark mode */
+  --popover-foreground: 243, 244, 246; /* Example RGB value for popover foreground color in dark mode */
+  
+  --card: 31, 41, 55; /* Example RGB value for card color in dark mode */
+  --card-foreground: 243, 244, 246; /* Example RGB value for card foreground color in dark mode */
+}
 
 
 /* Base styles */
@@ -12,6 +70,8 @@ body {
   color: #f3f4f6;
   line-height: 1.5;
 }
+
+
 
 /* Layout components */
 .container-custom {
