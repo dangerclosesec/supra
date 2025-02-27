@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import Layout from "@/components/layout/Layout";
 import PermissionTableVisualizer from "@/components/PermissionTableVisualizer";
 import RelationshipCreator from "@/components/RelationshipCreator";
+import RuleVisualizer from "@/components/RuleVisualizer";
 import {
   Shield,
   Book,
@@ -10,6 +11,7 @@ import {
   TreesIcon,
   Antenna,
   Link2,
+  BookOpen,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -52,6 +54,18 @@ export default function PermissionsPage() {
             </button>
             <button
               className={classNames(
+                activeTab === "rules" ? "bg-violet-500/10" : "",
+                "w-full cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium text-violet-400 outline-none"
+              )}
+              onClick={() => setActiveTab("rules")}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <BookOpen className="h-4 w-4" />
+                <span>Rules</span>
+              </div>
+            </button>
+            <button
+              className={classNames(
                 activeTab === "documentation" ? "bg-violet-500/10" : "",
                 "w-full cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium text-violet-400 outline-none"
               )}
@@ -80,6 +94,8 @@ export default function PermissionsPage() {
         {/* Tab content */}
         {activeTab === "explorer" ? (
           <PermissionTableVisualizer />
+        ) : activeTab === "rules" ? (
+          <RuleVisualizer />
         ) : activeTab === "documentation" ? (
           <div id="docs-content">
             <Card className="bg-[#1e1e2e] shadow-md border border-slate-700/40">
@@ -125,8 +141,16 @@ export default function PermissionsPage() {
                       Access control rules defined using expressions
                     </li>
                     <li>
+                      <strong className="text-white">Rules</strong> -
+                      Reusable, parameterized checks that evaluate conditions with context data
+                    </li>
+                    <li>
+                      <strong className="text-white">Attributes</strong> -
+                      Properties of entities that can be used in permission checks
+                    </li>
+                    <li>
                       <strong className="text-white">Expressions</strong> -
-                      Logic that defines permission rules using relations and
+                      Logic that defines permission rules using relations, rules, attributes and
                       operators
                     </li>
                   </ul>
@@ -162,6 +186,18 @@ export default function PermissionsPage() {
                           (manager and organization.billing_manager)
                         </code>{" "}
                         - Logical AND with grouping
+                      </li>
+                      <li>
+                        <code className="text-sm bg-teal-500/10 px-1 py-0.5 rounded text-teal-400">
+                          check_balance(account.balance, request.amount)
+                        </code>{" "}
+                        - Rule call with parameters
+                      </li>
+                      <li>
+                        <code className="text-sm bg-orange-500/10 px-1 py-0.5 rounded text-orange-400">
+                          request.amount > 1000
+                        </code>{" "}
+                        - Attribute comparison with context data
                       </li>
                     </ul>
                   </div>

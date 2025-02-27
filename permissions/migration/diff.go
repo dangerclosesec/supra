@@ -13,6 +13,9 @@ type ModelDiff struct {
 	AddedEntities    []string
 	RemovedEntities  []string
 	ModifiedEntities map[string]*EntityDiff
+	AddedRules       []model.Rule
+	RemovedRules     []string
+	ModifiedRules    map[string]*RuleDiff
 }
 
 // EntityDiff represents the differences between two entities
@@ -28,10 +31,28 @@ type PermissionDiff struct {
 	NewExpression string
 }
 
+// RuleDiff represents the differences between two rules
+type RuleDiff struct {
+	OldExpression string
+	NewExpression string
+	Parameters    ParametersDiff
+}
+
+// ParametersDiff represents differences in rule parameters
+type ParametersDiff struct {
+	Added    []model.RuleParameter
+	Removed  []string
+	Modified map[string]struct{
+		OldType string
+		NewType string
+	}
+}
+
 // GenerateDiff generates a diff between two permission models
 func GenerateDiff(oldModel, newModel *model.PermissionModel) *ModelDiff {
 	diff := &ModelDiff{
 		ModifiedEntities: make(map[string]*EntityDiff),
+		ModifiedRules:    make(map[string]*RuleDiff),
 	}
 
 	// Find added and removed entities
@@ -71,6 +92,49 @@ func GenerateDiff(oldModel, newModel *model.PermissionModel) *ModelDiff {
 		entityDiff := compareEntityPermissions(oldEntity, newEntity)
 		if !entityDiff.IsEmpty() {
 			diff.ModifiedEntities[name] = entityDiff
+		}
+	}
+	
+	// Find added and removed rules
+	oldRules := make(map[string]bool)
+	newRules := make(map[string]bool)
+	
+	for name := range oldModel.Rules {
+		oldRules[name] = true
+	}
+	
+	for name := range newModel.Rules {
+		newRules[name] = true
+	}
+	
+	// Find added rules
+	for name, rule := range newModel.Rules {
+		if !oldRules[name] {
+			diff.AddedRules = append(diff.AddedRules, *rule)
+		}
+	}
+	
+	// Find removed rules
+	for name := range oldRules {
+		if !newRules[name] {
+			diff.RemovedRules = append(diff.RemovedRules, name)
+		}
+	}
+	
+	// Compare common rules
+	for name, newRule := range newModel.Rules {
+		oldRule, exists := oldModel.Rules[name]
+		if !exists {
+			continue // Already handled as added rule
+		}
+		
+		// Compare rule expressions
+		if oldRule.Expression != newRule.Expression {
+			ruleDiff := &RuleDiff{
+				OldExpression: oldRule.Expression,
+				NewExpression: newRule.Expression,
+			}
+			diff.ModifiedRules[name] = ruleDiff
 		}
 	}
 
@@ -185,8 +249,51 @@ func (d *ModelDiff) String() string {
 			}
 		}
 	}
+	
+	// Added rules
+	if len(d.AddedRules) > 0 {
+		sb.WriteString("Added Rules:\n")
+		for _, rule := range d.AddedRules {
+			sb.WriteString(fmt.Sprintf("  + rule %s(", rule.Name))
+			
+			// Format parameters
+			for i, param := range rule.Parameters {
+				if i > 0 {
+					sb.WriteString(", ")
+				}
+				sb.WriteString(fmt.Sprintf("%s %s", param.Name, param.DataType))
+			}
+			sb.WriteString(fmt.Sprintf(") = %s\n", rule.Expression))
+		}
+		sb.WriteString("\n")
+	}
+	
+	// Removed rules
+	if len(d.RemovedRules) > 0 {
+		sb.WriteString("Removed Rules:\n")
+		for _, ruleName := range d.RemovedRules {
+			sb.WriteString(fmt.Sprintf("  - %s\n", ruleName))
+		}
+		sb.WriteString("\n")
+	}
+	
+	// Modified rules
+	if len(d.ModifiedRules) > 0 {
+		sb.WriteString("Modified Rules:\n")
+		for ruleName, ruleDiff := range d.ModifiedRules {
+			sb.WriteString(fmt.Sprintf("  * %s:\n", ruleName))
+			sb.WriteString(fmt.Sprintf("    - %s\n", ruleDiff.OldExpression))
+			sb.WriteString(fmt.Sprintf("    + %s\n", ruleDiff.NewExpression))
+		}
+		sb.WriteString("\n")
+	}
 
-	if len(d.AddedEntities) == 0 && len(d.RemovedEntities) == 0 && len(d.ModifiedEntities) == 0 {
+	if len(d.AddedEntities) == 0 && 
+	   len(d.RemovedEntities) == 0 && 
+	   len(d.ModifiedEntities) == 0 &&
+	   len(d.AddedRules) == 0 &&
+	   len(d.RemovedRules) == 0 &&
+	   len(d.ModifiedRules) == 0 {
 		sb.WriteString("No changes detected.\n")
 	}
 
@@ -195,8 +302,12 @@ func (d *ModelDiff) String() string {
 
 // IsEmpty returns true if the diff contains no changes
 func (d *ModelDiff) IsEmpty() bool {
-	// Check if there are any entity additions, removals, or modifications
+	// Check if there are any entity additions, removals, modifications,
+	// or rule additions, removals, modifications
 	return len(d.AddedEntities) == 0 &&
 		len(d.RemovedEntities) == 0 &&
-		len(d.ModifiedEntities) == 0
+		len(d.ModifiedEntities) == 0 &&
+		len(d.AddedRules) == 0 &&
+		len(d.RemovedRules) == 0 &&
+		len(d.ModifiedRules) == 0
 }

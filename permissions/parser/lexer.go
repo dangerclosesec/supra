@@ -78,13 +78,49 @@ func (l *Lexer) NextToken() Token {
 	case '@':
 		tok = Token{Type: TokenAt, Literal: string(l.ch), Line: l.line, Column: l.column}
 	case '=':
-		tok = Token{Type: TokenEquals, Literal: string(l.ch), Line: l.line, Column: l.column}
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = Token{Type: TokenEQ, Literal: literal, Line: l.line, Column: l.column - 1}
+		} else {
+			tok = Token{Type: TokenEquals, Literal: string(l.ch), Line: l.line, Column: l.column}
+		}
+	case '!':
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = Token{Type: TokenNEQ, Literal: literal, Line: l.line, Column: l.column - 1}
+		} else {
+			tok = Token{Type: TokenIllegal, Literal: string(l.ch), Line: l.line, Column: l.column}
+		}
+	case '<':
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = Token{Type: TokenLTE, Literal: literal, Line: l.line, Column: l.column - 1}
+		} else {
+			tok = Token{Type: TokenLT, Literal: string(l.ch), Line: l.line, Column: l.column}
+		}
+	case '>':
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = Token{Type: TokenGTE, Literal: literal, Line: l.line, Column: l.column - 1}
+		} else {
+			tok = Token{Type: TokenGT, Literal: string(l.ch), Line: l.line, Column: l.column}
+		}
 	case '(':
 		tok = Token{Type: TokenLParen, Literal: string(l.ch), Line: l.line, Column: l.column}
 	case ')':
 		tok = Token{Type: TokenRParen, Literal: string(l.ch), Line: l.line, Column: l.column}
 	case '.':
 		tok = Token{Type: TokenDot, Literal: string(l.ch), Line: l.line, Column: l.column}
+	case ',':
+		tok = Token{Type: TokenComma, Literal: string(l.ch), Line: l.line, Column: l.column}
 	case 0:
 		tok = Token{Type: TokenEOF, Literal: "", Line: l.line, Column: l.column}
 	default:

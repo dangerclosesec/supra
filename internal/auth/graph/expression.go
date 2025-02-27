@@ -44,6 +44,84 @@ func (e *RelationExpression) String() string {
 	return fmt.Sprintf("%s.%s", e.RelationPath, e.RelationName)
 }
 
+// ContextExpression represents a reference to a value in the context
+type ContextExpression struct {
+	Path []string // Path to the value in the context object
+}
+
+func (e *ContextExpression) String() string {
+	return strings.Join(e.Path, ".")
+}
+
+// AttributeExpression represents a reference to an entity attribute
+type AttributeExpression struct {
+	EntityType   string // The entity type that has the attribute
+	AttributeName string // The attribute name
+}
+
+func (e *AttributeExpression) String() string {
+	if e.EntityType == "" {
+		return e.AttributeName
+	}
+	return fmt.Sprintf("%s.%s", e.EntityType, e.AttributeName)
+}
+
+// RuleExpression represents a call to a rule function
+type RuleExpression struct {
+	RuleName  string       // The name of the rule
+	Arguments []Expression // The arguments to the rule
+}
+
+func (e *RuleExpression) String() string {
+	args := make([]string, len(e.Arguments))
+	for i, arg := range e.Arguments {
+		args[i] = arg.String()
+	}
+	return fmt.Sprintf("%s(%s)", e.RuleName, strings.Join(args, ", "))
+}
+
+// LiteralExpression represents a literal value (string, number, boolean)
+type LiteralExpression struct {
+	Value interface{}
+}
+
+func (e *LiteralExpression) String() string {
+	switch v := e.Value.(type) {
+	case string:
+		return fmt.Sprintf("%q", v)
+	default:
+		return fmt.Sprintf("%v", e.Value)
+	}
+}
+
+// ComparisonExpression represents a comparison between two expressions
+type ComparisonExpression struct {
+	Left     Expression
+	Operator tokenType
+	Right    Expression
+}
+
+func (e *ComparisonExpression) String() string {
+	var op string
+	switch e.Operator {
+	case tokenEQ:
+		op = "=="
+	case tokenNEQ:
+		op = "!="
+	case tokenGT:
+		op = ">"
+	case tokenGTE:
+		op = ">="
+	case tokenLT:
+		op = "<"
+	case tokenLTE:
+		op = "<="
+	default:
+		op = "??"
+	}
+	return fmt.Sprintf("%s %s %s", e.Left.String(), op, e.Right.String())
+}
+
 // Token types for the lexer
 type tokenType int
 
@@ -54,6 +132,13 @@ const (
 	tokenOr
 	tokenLeftParen
 	tokenRightParen
+	tokenComma
+	tokenEQ  // ==
+	tokenNEQ // !=
+	tokenGT  // >
+	tokenGTE // >=
+	tokenLT  // <
+	tokenLTE // <=
 	tokenEOF
 )
 
@@ -109,9 +194,47 @@ func (p *ConditionParser) tokenize() error {
 			p.tokens = append(p.tokens, Token{Type: tokenRightParen, Value: ")"})
 			pos++
 
+		case input[pos] == ',':
+			p.tokens = append(p.tokens, Token{Type: tokenComma, Value: ","})
+			pos++
+
 		case input[pos] == '.':
 			p.tokens = append(p.tokens, Token{Type: tokenDot, Value: "."})
 			pos++
+
+		case input[pos] == '=':
+			if pos+1 < len(input) && input[pos+1] == '=' {
+				p.tokens = append(p.tokens, Token{Type: tokenEQ, Value: "=="})
+				pos += 2
+			} else {
+				return fmt.Errorf("unexpected character: %c at position %d (expected '==')", input[pos], pos)
+			}
+
+		case input[pos] == '!':
+			if pos+1 < len(input) && input[pos+1] == '=' {
+				p.tokens = append(p.tokens, Token{Type: tokenNEQ, Value: "!="})
+				pos += 2
+			} else {
+				return fmt.Errorf("unexpected character: %c at position %d (expected '!=')", input[pos], pos)
+			}
+
+		case input[pos] == '>':
+			if pos+1 < len(input) && input[pos+1] == '=' {
+				p.tokens = append(p.tokens, Token{Type: tokenGTE, Value: ">="})
+				pos += 2
+			} else {
+				p.tokens = append(p.tokens, Token{Type: tokenGT, Value: ">"})
+				pos++
+			}
+
+		case input[pos] == '<':
+			if pos+1 < len(input) && input[pos+1] == '=' {
+				p.tokens = append(p.tokens, Token{Type: tokenLTE, Value: "<="})
+				pos += 2
+			} else {
+				p.tokens = append(p.tokens, Token{Type: tokenLT, Value: "<"})
+				pos++
+			}
 
 		case unicode.IsLetter(rune(input[pos])) || unicode.IsDigit(rune(input[pos])) || input[pos] == '_':
 			// Parse identifier (relation name or operator)
@@ -168,13 +291,13 @@ func (p *ConditionParser) parseOr() (Expression, error) {
 
 // parseAnd parses expressions connected with AND
 func (p *ConditionParser) parseAnd() (Expression, error) {
-	left, err := p.parsePrimary()
+	left, err := p.parseComparison()
 	if err != nil {
 		return nil, err
 	}
 
 	for p.match(tokenAnd) {
-		right, err := p.parsePrimary()
+		right, err := p.parseComparison()
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +307,33 @@ func (p *ConditionParser) parseAnd() (Expression, error) {
 	return left, nil
 }
 
-// parsePrimary parses primary expressions (identifiers or parenthesized expressions)
+// parseComparison parses comparison expressions (==, !=, >, >=, <, <=)
+func (p *ConditionParser) parseComparison() (Expression, error) {
+	left, err := p.parsePrimary()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for comparison operators
+	if p.match(tokenEQ, tokenNEQ, tokenGT, tokenGTE, tokenLT, tokenLTE) {
+		operator := p.previous().Type
+		right, err := p.parsePrimary()
+		if err != nil {
+			return nil, err
+		}
+
+		// Create a comparison expression based on the operator
+		return &ComparisonExpression{
+			Left:     left,
+			Operator: operator,
+			Right:    right,
+		}, nil
+	}
+
+	return left, nil
+}
+
+// parsePrimary parses primary expressions (identifiers, literals, or parenthesized expressions)
 func (p *ConditionParser) parsePrimary() (Expression, error) {
 	// Parse parenthesized expression
 	if p.match(tokenLeftParen) {
@@ -200,24 +349,73 @@ func (p *ConditionParser) parsePrimary() (Expression, error) {
 		return expr, nil
 	}
 
-	// Parse relation expression
+	// Parse identifier (relation, attribute, rule call, or context reference)
 	if p.check(tokenIdentifier) {
-		entityType := ""
-		relationName := p.advance().Value
+		identName := p.advance().Value
 
-		// Check for dot notation (e.g., "organization.owner")
-		if p.match(tokenDot) {
-			if !p.check(tokenIdentifier) {
-				return nil, fmt.Errorf("expected relation name after dot")
+		// Check for function call (rule call)
+		if p.match(tokenLeftParen) {
+			// This is a rule call
+			ruleExpr := &RuleExpression{
+				RuleName:  identName,
+				Arguments: []Expression{},
 			}
 
-			entityType = relationName
-			relationName = p.advance().Value
+			// Parse arguments if there are any
+			if !p.check(tokenRightParen) {
+				for {
+					// Parse the argument expression
+					argExpr, err := p.parseExpression()
+					if err != nil {
+						return nil, err
+					}
+					ruleExpr.Arguments = append(ruleExpr.Arguments, argExpr)
+
+					// Check if there are more arguments
+					if !p.match(tokenComma) {
+						break
+					}
+				}
+			}
+
+			// Expect closing parenthesis
+			if !p.match(tokenRightParen) {
+				return nil, fmt.Errorf("expected closing parenthesis for rule call")
+			}
+
+			return ruleExpr, nil
 		}
 
+		// Check for dot notation (e.g., "organization.owner" or "request.amount")
+		if p.match(tokenDot) {
+			if !p.check(tokenIdentifier) {
+				return nil, fmt.Errorf("expected identifier after dot")
+			}
+
+			secondPart := p.advance().Value
+
+			// Special handling for request context
+			if identName == "request" {
+				return &ContextExpression{
+					Path: []string{identName, secondPart},
+				}, nil
+			}
+
+			// For now, treat all other dotted references as relation references
+			// In a complete implementation, this would check the schema to determine
+			// if this is a relation or attribute reference
+			return &RelationExpression{
+				RelationPath: identName,
+				RelationName: secondPart,
+			}, nil
+		}
+
+		// Simple identifier - treat as relation reference
+		// In a complete implementation, this would check the schema to determine
+		// if this is a relation or attribute reference
 		return &RelationExpression{
-			RelationPath: entityType,
-			RelationName: relationName,
+			RelationPath: "",
+			RelationName: identName,
 		}, nil
 	}
 

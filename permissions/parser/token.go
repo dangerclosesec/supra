@@ -26,6 +26,7 @@ const (
 	TokenRelation
 	TokenPermission
 	TokenAttribute
+	TokenRule
 
 	// Operators and delimiters
 	TokenLBrace    // {
@@ -39,7 +40,16 @@ const (
 	TokenLParen    // (
 	TokenRParen    // )
 	TokenDot       // .
+	TokenComma     // ,
 	TokenSemicolon // ;
+	
+	// Comparison operators
+	TokenGT        // >
+	TokenGTE       // >=
+	TokenLT        // <
+	TokenLTE       // <=
+	TokenEQ        // ==
+	TokenNEQ       // !=
 )
 
 // Keywords maps keyword strings to token types
@@ -48,6 +58,7 @@ var Keywords = map[string]TokenType{
 	"relation":   TokenRelation,
 	"permission": TokenPermission,
 	"attribute":  TokenAttribute,
+	"rule":       TokenRule,
 	"or":         TokenOr,
 	"and":        TokenAnd,
 }

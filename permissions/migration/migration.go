@@ -3,6 +3,7 @@ package migration
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -145,24 +146,37 @@ func (m *Migrator) ApplyMigration(model *model.PermissionModel, description stri
 	return diffText, nil
 }
 
+// convertRuleParameters converts model.Rule.Parameters to a format suitable for JSON storage
+func convertRuleParameters(rule *model.Rule) []map[string]string {
+	params := make([]map[string]string, len(rule.Parameters))
+	for i, param := range rule.Parameters {
+		params[i] = map[string]string{
+			"name":      param.Name,
+			"data_type": string(param.DataType),
+		}
+	}
+	return params
+}
+
 // LoadCurrentModel loads the current permission model from the database
 func (m *Migrator) LoadCurrentModel() (*model.PermissionModel, error) {
 	permModel := model.NewPermissionModel()
 
-	rows, err := m.DB.Query(`
+	// Load permissions
+	permRows, err := m.DB.Query(`
 		SELECT entity_type, permission_name, condition_expression
 		FROM permission_definitions
 	`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer permRows.Close()
 
 	entityMap := make(map[string]*model.Entity)
 
-	for rows.Next() {
+	for permRows.Next() {
 		var entityType, permName, expr string
-		if err := rows.Scan(&entityType, &permName, &expr); err != nil {
+		if err := permRows.Scan(&entityType, &permName, &expr); err != nil {
 			return nil, err
 		}
 
@@ -181,6 +195,69 @@ func (m *Migrator) LoadCurrentModel() (*model.PermissionModel, error) {
 			Expression: expr,
 		})
 	}
+	
+	// Check if rule_definitions table exists
+	var ruleTableExists bool
+	err = m.DB.QueryRow(`
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public'
+			AND table_name = 'rule_definitions'
+		)
+	`).Scan(&ruleTableExists)
+	
+	if err != nil {
+		// If we can't check, we'll assume no rules
+		log.Printf("Warning: Could not check if rule_definitions table exists: %v", err)
+	} else if ruleTableExists {
+		// Load rules if the table exists
+		ruleRows, err := m.DB.Query(`
+			SELECT rule_name, parameters, expression
+			FROM rule_definitions
+		`)
+		if err != nil {
+			log.Printf("Warning: Could not load rules: %v", err)
+		} else {
+			defer ruleRows.Close()
+			
+			for ruleRows.Next() {
+				var ruleName string
+				var parametersJSON []byte
+				var expression string
+				
+				if err := ruleRows.Scan(&ruleName, &parametersJSON, &expression); err != nil {
+					log.Printf("Warning: Could not scan rule row: %v", err)
+					continue
+				}
+				
+				// Parse parameters
+				var paramsData []map[string]string
+				if err := json.Unmarshal(parametersJSON, &paramsData); err != nil {
+					log.Printf("Warning: Could not parse rule parameters: %v", err)
+					continue
+				}
+				
+				// Convert parameters to model.RuleParameter
+				params := make([]model.RuleParameter, len(paramsData))
+				for i, p := range paramsData {
+					params[i] = model.RuleParameter{
+						Name:     p["name"],
+						DataType: model.AttributeDataType(p["data_type"]),
+					}
+				}
+				
+				// Create rule
+				rule := &model.Rule{
+					Name:       ruleName,
+					Parameters: params,
+					Expression: expression,
+				}
+				
+				// Add rule to model
+				permModel.AddRule(rule)
+			}
+		}
+	}
 
 	return permModel, nil
 }
@@ -193,8 +270,103 @@ func (m *Migrator) applyModelInTransaction(tx *sql.Tx, model *model.PermissionMo
 		return fmt.Errorf("failed to clear permissions: %w", err)
 	}
 
+	// Check if rule_definitions table exists
+	var ruleTableExists bool
+	err = tx.QueryRow(`
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public'
+			AND table_name = 'rule_definitions'
+		)
+	`).Scan(&ruleTableExists)
+
+	if err != nil {
+		return fmt.Errorf("failed to check if rule_definitions table exists: %w", err)
+	}
+
+	// Create rule_definitions table if it doesn't exist
+	if !ruleTableExists {
+		_, err = tx.Exec(`
+			CREATE TABLE rule_definitions (
+				id SERIAL PRIMARY KEY,
+				rule_name TEXT NOT NULL UNIQUE,
+				parameters JSONB NOT NULL,
+				expression TEXT NOT NULL,
+				description TEXT,
+				created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to create rule_definitions table: %w", err)
+		}
+		log.Println("Created rule_definitions table")
+	} else {
+		// Clear existing rules if table exists
+		_, err = tx.Exec(`DELETE FROM rule_definitions`)
+		if err != nil {
+			return fmt.Errorf("failed to clear rules: %w", err)
+		}
+	}
+
+	// Insert global rules
+	for _, rule := range model.Rules {
+		// Skip nil rules (shouldn't happen but just in case)
+		if rule == nil {
+			continue
+		}
+
+		// Convert rule parameters to JSON
+		parametersJSON, err := json.Marshal(convertRuleParameters(rule))
+		if err != nil {
+			return fmt.Errorf("failed to marshal rule parameters: %w", err)
+		}
+
+		// Insert rule
+		_, err = tx.Exec(`
+			INSERT INTO rule_definitions (rule_name, parameters, expression, description)
+			VALUES ($1, $2, $3, $4)
+		`, rule.Name, parametersJSON, rule.Expression, "")
+		if err != nil {
+			return fmt.Errorf("failed to insert rule definition: %w", err)
+		}
+	}
+
 	// Insert entities and permissions
 	for _, entity := range model.Entities {
+		// Insert entity-level rules
+		for i := range entity.Rules {
+			rule := &entity.Rules[i]
+			
+			// Convert rule parameters to JSON
+			parametersJSON, err := json.Marshal(convertRuleParameters(rule))
+			if err != nil {
+				return fmt.Errorf("failed to marshal rule parameters: %w", err)
+			}
+
+			// Check if rule already exists in global rules (skip if it does)
+			var exists bool
+			err = tx.QueryRow(`
+				SELECT EXISTS (
+					SELECT 1 FROM rule_definitions WHERE rule_name = $1
+				)
+			`, rule.Name).Scan(&exists)
+
+			if err != nil {
+				return fmt.Errorf("failed to check if rule exists: %w", err)
+			}
+
+			if !exists {
+				// Insert rule
+				_, err = tx.Exec(`
+					INSERT INTO rule_definitions (rule_name, parameters, expression, description)
+					VALUES ($1, $2, $3, $4)
+				`, rule.Name, parametersJSON, rule.Expression, "")
+				if err != nil {
+					return fmt.Errorf("failed to insert entity rule definition: %w", err)
+				}
+			}
+		}
+
 		// Insert permissions
 		for _, perm := range entity.Permissions {
 			_, err := tx.Exec(`

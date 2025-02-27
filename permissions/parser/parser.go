@@ -3,6 +3,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dangerclosesec/supra/permissions/model"
 )
@@ -53,6 +54,12 @@ func (p *Parser) ParsePermissionModel() *model.PermissionModel {
 			if entity != nil {
 				permModel.AddEntity(entity)
 			}
+		} else if p.curToken.Type == TokenRule {
+			rule := p.parseRule()
+			if rule != nil {
+				// Add the rule to the global rules map
+				permModel.AddRule(rule)
+			}
 		} else {
 			// Skip any unexpected tokens at the top level
 			p.nextToken()
@@ -79,7 +86,7 @@ func (p *Parser) parseEntity() *model.Entity {
 
 	p.nextToken() // Move past the opening brace
 
-	// Parse relations, permissions, and attributes
+	// Parse relations, permissions, attributes, and rules
 	for p.curToken.Type != TokenRBrace && p.curToken.Type != TokenEOF {
 		if p.curToken.Type == TokenRelation {
 			relation := p.parseRelation()
@@ -95,6 +102,11 @@ func (p *Parser) parseEntity() *model.Entity {
 			attribute := p.parseAttribute()
 			if attribute != nil {
 				entity.Attributes = append(entity.Attributes, *attribute)
+			}
+		} else if p.curToken.Type == TokenRule {
+			rule := p.parseRule()
+			if rule != nil {
+				entity.Rules = append(entity.Rules, *rule)
 			}
 		} else {
 			// Skip unexpected tokens within entity body
@@ -249,6 +261,7 @@ func (p *Parser) parseAttribute() *model.Attribute {
 	for p.peekToken.Type != TokenRelation &&
 		p.peekToken.Type != TokenPermission &&
 		p.peekToken.Type != TokenAttribute &&
+		p.peekToken.Type != TokenRule &&
 		p.peekToken.Type != TokenRBrace &&
 		p.peekToken.Type != TokenEOF {
 		p.nextToken()
@@ -260,6 +273,169 @@ func (p *Parser) parseAttribute() *model.Attribute {
 	return attribute
 }
 
+// parseRule parses a rule declaration
+func (p *Parser) parseRule() *model.Rule {
+	startLine := p.curToken.Line
+
+	// "rule" keyword is already consumed
+	if !p.expectPeek(TokenIdent) {
+		return nil
+	}
+
+	rule := &model.Rule{
+		Name:       p.curToken.Literal,
+		LineNumber: startLine,
+	}
+
+	// Parse rule parameters in parentheses
+	if !p.expectPeek(TokenLParen) {
+		return nil
+	}
+	
+	// Parse parameters until we reach closing parenthesis
+	for !p.peekTokenIs(TokenRParen) && !p.peekTokenIs(TokenEOF) {
+		p.nextToken() // Move to parameter name
+		
+		if p.curToken.Type != TokenIdent {
+			p.addError("expected parameter name")
+			return nil
+		}
+		
+		paramName := p.curToken.Literal
+		
+		if !p.expectPeek(TokenIdent) {
+			p.addError("expected parameter type")
+			return nil
+		}
+		
+		dataTypeStr := p.curToken.Literal
+		
+		// Check if the next token is [ for array types
+		if p.peekTokenIs(TokenLBracket) {
+			p.nextToken() // consume [
+			
+			// Expect ]
+			if !p.expectPeek(TokenRBracket) {
+				p.addError("expected ']' after '['")
+				return nil
+			}
+			
+			// Modify dataTypeStr to include the array suffix
+			dataTypeStr += "[]"
+		}
+		
+		if !model.IsValidAttributeDataType(dataTypeStr) {
+			p.addError(fmt.Sprintf("invalid parameter data type: %s", dataTypeStr))
+			return nil
+		}
+		
+		parameter := model.RuleParameter{
+			Name:     paramName,
+			DataType: model.AttributeDataType(dataTypeStr),
+		}
+		
+		rule.Parameters = append(rule.Parameters, parameter)
+		
+		// If next token is comma, consume it and continue
+		if p.peekTokenIs(TokenComma) {
+			p.nextToken()
+		} else if !p.peekTokenIs(TokenRParen) {
+			p.addError("expected ',' or ')' after parameter")
+			return nil
+		}
+	}
+	
+	// Consume the closing parenthesis
+	if !p.expectPeek(TokenRParen) {
+		return nil
+	}
+	
+	// Expect opening brace
+	if !p.expectPeek(TokenLBrace) {
+		return nil
+	}
+	
+	// Parse rule body (expression)
+	p.nextToken() // Move past the opening brace
+	
+	// Instead of trying to parse the expression as a full expression tree,
+	// just capture the rule body as a string for now
+	var bodyBuilder strings.Builder
+	
+	// Read tokens until we find the closing brace
+	for p.curToken.Type != TokenRBrace && p.curToken.Type != TokenEOF {
+		// Add the token to the body
+		if len(p.curToken.Literal) > 0 {
+			if bodyBuilder.Len() > 0 {
+				bodyBuilder.WriteString(" ")
+			}
+			bodyBuilder.WriteString(p.curToken.Literal)
+		}
+		p.nextToken()
+	}
+	
+	// Set the expression as the raw body text
+	rule.Expression = strings.TrimSpace(bodyBuilder.String())
+	
+	// For now, use a RelationRef as a placeholder for the parsed expression
+	rule.ParsedExpr = &model.RelationRef{
+		Name: rule.Expression,
+	}
+	
+	// Check if we found the closing brace
+	if p.curToken.Type != TokenRBrace {
+		p.addError("expected closing brace for rule body")
+		return nil
+	}
+	
+	// Move to the next token
+	p.nextToken()
+	
+	return rule
+}
+
+// parseRuleExpression parses the expression within a rule
+func (p *Parser) parseRuleExpression() (model.Expression, string) {
+	// For simplicity in testing, just capture the expression as a string
+	// and create a basic expression structure
+	
+	var expr model.Expression
+	var exprStr string
+	
+	// For comparison expressions like "a >= b", build a relation expression
+	if p.curTokenIs(TokenIdent) {
+		leftName := p.curToken.Literal
+		
+		// Check for comparison operators
+		if p.peekTokenIs(TokenGT) || p.peekTokenIs(TokenGTE) || p.peekTokenIs(TokenLT) || 
+		   p.peekTokenIs(TokenLTE) || p.peekTokenIs(TokenEQ) || p.peekTokenIs(TokenNEQ) {
+			
+			// Get the operator
+			p.nextToken()
+			operator := p.curToken.Literal
+			
+			// Get the right side
+			if p.expectPeek(TokenIdent) {
+				rightName := p.curToken.Literal
+				
+				// Create a relation expression with the full expression as the name
+				exprStr = leftName + " " + operator + " " + rightName
+				expr = &model.RelationRef{
+					Name: exprStr,
+				}
+				
+				// Move to the next token
+				p.nextToken()
+				return expr, exprStr
+			}
+		}
+	}
+	
+	// If not a comparison expression, fall back to regular expression parsing
+	expr, exprStr = p.parseExpression(LOWEST)
+	return expr, exprStr
+}
+
 // parseExpression parses a permission expression
 func (p *Parser) parseExpression(precedence int) (model.Expression, string) {
 	var leftExpr model.Expression
@@ -268,22 +444,79 @@ func (p *Parser) parseExpression(precedence int) (model.Expression, string) {
 	// Parse the prefix expression
 	switch p.curToken.Type {
 	case TokenIdent:
-		// Check if it's a dotted reference
-		if p.peekTokenIs(TokenDot) {
+		// Check if it's a function call (rule call)
+		if p.peekTokenIs(TokenLParen) {
+			ruleName := p.curToken.Literal
+			p.nextToken() // consume the left paren
+			
+			// Parse rule arguments
+			ruleCall := &model.RuleCall{
+				Name: ruleName,
+			}
+			
+			argStrings := []string{}
+			
+			// If there are arguments
+			if !p.peekTokenIs(TokenRParen) {
+				p.nextToken() // Move to the first argument
+				
+				for {
+					argExpr, argStr := p.parseExpression(LOWEST)
+					if argExpr == nil {
+						p.addError("invalid rule argument")
+						return nil, ""
+					}
+					
+					ruleCall.Arguments = append(ruleCall.Arguments, argExpr)
+					argStrings = append(argStrings, argStr)
+					
+					// If next token is comma, continue to next argument
+					if p.peekTokenIs(TokenComma) {
+						p.nextToken() // consume comma
+						p.nextToken() // move to next argument
+					} else {
+						break
+					}
+				}
+			}
+			
+			if !p.expectPeek(TokenRParen) {
+				p.addError("expected closing parenthesis for rule call")
+				return nil, ""
+			}
+			
+			leftExpr = ruleCall
+			leftStr = ruleName + "(" + strings.Join(argStrings, ", ") + ")"
+		} else if p.peekTokenIs(TokenDot) {
+			// Check if it's a dotted reference (could be relation or attribute or request context)
 			entity := p.curToken.Literal
 			p.nextToken() // consume the dot
-			p.nextToken() // move to the relation name
+			p.nextToken() // move to the relation/attribute name
+			
 			if p.curToken.Type != TokenIdent {
 				p.addError(fmt.Sprintf("expected identifier after dot, got %s", p.curToken.Literal))
 				return nil, ""
 			}
-			leftExpr = &model.RelationRef{
-				Entity: entity,
-				Name:   p.curToken.Literal,
+			
+			// Special handling for 'request' context reference
+			if entity == "request" {
+				contextRef := &model.ContextRef{
+					Path: []string{"request", p.curToken.Literal},
+				}
+				leftExpr = contextRef
+				leftStr = entity + "." + p.curToken.Literal
+			} else {
+				// For now, treat as relation reference. In a complete implementation,
+				// we would need to check if it's an attribute reference based on the model
+				leftExpr = &model.RelationRef{
+					Entity: entity,
+					Name:   p.curToken.Literal,
+				}
+				leftStr = entity + "." + p.curToken.Literal
 			}
-			leftStr = entity + "." + p.curToken.Literal
 		} else {
-			// Direct relation reference
+			// Try to determine if this is a relation reference or an attribute reference
+			// For now, default to relation reference
 			leftExpr = &model.RelationRef{
 				Name: p.curToken.Literal,
 			}

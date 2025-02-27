@@ -13,6 +13,7 @@ type Entity struct {
 	Relations   []Relation
 	Permissions []Permission
 	Attributes  []Attribute
+	Rules       []Rule
 	Comments    []string
 }
 
@@ -262,9 +263,64 @@ func (p *Parentheses) String() string {
 	return "(" + p.Expr.String() + ")"
 }
 
+// Rule represents a named function that evaluates attributes against context values
+type Rule struct {
+	Name       string
+	Parameters []RuleParameter
+	Expression string // The raw expression string
+	ParsedExpr Expression
+	Comments   []string
+	LineNumber int
+}
+
+// RuleParameter represents a parameter passed to a rule
+type RuleParameter struct {
+	Name     string
+	DataType AttributeDataType
+}
+
+// RuleCall represents a call to a rule with arguments
+type RuleCall struct {
+	Name      string
+	Arguments []Expression
+}
+
+func (r *RuleCall) String() string {
+	args := make([]string, len(r.Arguments))
+	for i, arg := range r.Arguments {
+		args[i] = arg.String()
+	}
+	return r.Name + "(" + strings.Join(args, ", ") + ")"
+}
+
+// ContextRef represents a reference to a value in the context
+type ContextRef struct {
+	Path []string
+}
+
+func (c *ContextRef) String() string {
+	return strings.Join(c.Path, ".")
+}
+
+// LiteralValue represents a literal value in an expression
+type LiteralValue struct {
+	Value interface{}
+	Type  AttributeDataType
+}
+
+func (l *LiteralValue) String() string {
+	switch v := l.Value.(type) {
+	case string:
+		return `"` + v + `"`
+	default:
+		return fmt.Sprintf("%v", l.Value)
+	}
+}
+
 // PermissionModel represents a complete permission model
 type PermissionModel struct {
 	Entities map[string]*Entity
+	Rules    map[string]*Rule  // Global rules indexed by name
 	Source   string // Source file path
 }
 
@@ -272,15 +328,39 @@ type PermissionModel struct {
 func NewPermissionModel() *PermissionModel {
 	return &PermissionModel{
 		Entities: make(map[string]*Entity),
+		Rules:    make(map[string]*Rule),
 	}
 }
 
 // AddEntity adds an entity to the model
 func (m *PermissionModel) AddEntity(entity *Entity) {
 	m.Entities[entity.Name] = entity
+	
+	// Add entity-specific rules to global rules
+	for _, rule := range entity.Rules {
+		m.Rules[rule.Name] = &rule
+	}
+}
+
+// AddRule adds a global rule to the model
+func (m *PermissionModel) AddRule(rule *Rule) {
+	m.Rules[rule.Name] = rule
 }
 
 // GetEntity gets an entity by name
 func (m *PermissionModel) GetEntity(name string) *Entity {
 	return m.Entities[name]
+}
+
+// GetRule gets a rule by name
+func (m *PermissionModel) GetRule(name string) *Rule {
+	return m.Rules[name]
+}
+
+// SyncRulesToDatabase saves all rules to the database
+func (m *PermissionModel) SyncRulesToDatabase(db interface{}) error {
+	// This is a placeholder. In a full implementation, this would insert/update
+	// rule definitions in the database from the parsed model.
+	// The actual implementation would depend on the database interface used.
+	return nil
 }

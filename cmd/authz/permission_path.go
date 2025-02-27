@@ -69,7 +69,7 @@ func (s *AuthzService) addPermissionPathEndpoint(mux *http.ServeMux) {
 
 		// Check if permission is allowed (for informational purposes)
 		allowed, _ := s.graph.CheckPermission(ctx, req.SubjectType, req.SubjectID,
-			req.Permission, req.ObjectType, req.ObjectID)
+			req.Permission, req.ObjectType, req.ObjectID, nil)
 
 		// Parse the expression to understand what to look for
 		parser := graph.NewConditionParser(conditionExpr)
