@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/dangerclosesec/supra/internal/auth/graph"
@@ -181,6 +182,9 @@ func (s *AuthzService) Start() error {
 
 	s.addSchemaExplorerEndpoints(mux)
 
+	// Add rule management endpoints
+	s.addRuleEndpoints(mux)
+
 	// Add testing endpoints
 	s.addPermissionVisualizer(mux)
 
@@ -201,11 +205,12 @@ func (s *AuthzService) Start() error {
 
 // CheckPermissionRequest represents an access check request
 type CheckPermissionRequest struct {
-	SubjectType string `json:"subject_type"`
-	SubjectID   string `json:"subject_id"`
-	Permission  string `json:"permission"`
-	ObjectType  string `json:"object_type"`
-	ObjectID    string `json:"object_id"`
+	SubjectType string                 `json:"subject_type"`
+	SubjectID   string                 `json:"subject_id"`
+	Permission  string                 `json:"permission"`
+	ObjectType  string                 `json:"object_type"`
+	ObjectID    string                 `json:"object_id"`
+	Context     map[string]interface{} `json:"context,omitempty"`
 }
 
 // CheckPermissionResponse is the result of a permission check
@@ -271,9 +276,20 @@ func (s *AuthzService) checkPermissionHandler(w http.ResponseWriter, r *http.Req
 
 	log.Printf("Permission condition: %s", conditionExpr)
 
-	// Use the new condition parser and evaluator
+	// Prepare context for evaluation - if none provided, use empty map
+	contextData := req.Context
+	if contextData == nil {
+		contextData = make(map[string]interface{})
+	}
+
+	// Add request context for backward compatibility
+	if _, hasRequestCtx := contextData["request"]; !hasRequestCtx {
+		contextData["request"] = make(map[string]interface{})
+	}
+
+	// Use the condition parser and evaluator with context
 	allowed, err := s.graph.EvaluateCondition(ctx, conditionExpr,
-		req.SubjectType, req.SubjectID, req.ObjectType, req.ObjectID)
+		req.SubjectType, req.SubjectID, req.ObjectType, req.ObjectID, contextData)
 
 	if err != nil {
 		log.Printf("Error evaluating permission: %v", err)
@@ -317,21 +333,69 @@ func (s *AuthzService) entityHandler(w http.ResponseWriter, r *http.Request) {
 		// Creates a new entity
 		var req EntityRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			jsonResponse(w, EntityResponse{Error: "Invalid request format"}, http.StatusBadRequest)
+			standardErrorResponse(
+				w,
+				"invalid_request",
+				"Invalid request format",
+				err.Error(),
+				http.StatusBadRequest,
+			)
 			return
 		}
 
 		if req.Type == "" || req.ExternalID == "" {
-			jsonResponse(w, EntityResponse{Error: "Type and external_id are required"}, http.StatusBadRequest)
+			standardErrorResponse(
+				w,
+				"missing_fields",
+				"Required fields missing",
+				"Type and external_id are required fields",
+				http.StatusBadRequest,
+			)
 			return
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
+		// Check if entity already exists
+		exists, _ := s.entityExists(ctx, req.Type, req.ExternalID)
+		if exists {
+			standardErrorResponse(
+				w,
+				"entity_already_exists",
+				"Entity already exists",
+				fmt.Sprintf("Entity with type '%s' and ID '%s' already exists", req.Type, req.ExternalID),
+				http.StatusConflict,
+			)
+			return
+		}
+
 		entity, err := s.graph.CreateEntity(ctx, req.Type, req.ExternalID, req.Properties)
 		if err != nil {
-			jsonResponse(w, EntityResponse{Error: err.Error()}, http.StatusInternalServerError)
+			log.Printf("Error creating entity: %v", err)
+
+			// Check for specific error types and provide better responses
+			if strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "duplicate key") {
+				standardErrorResponse(
+					w,
+					"entity_already_exists",
+					"Entity already exists",
+					err.Error(),
+					http.StatusConflict,
+				)
+				return
+			}
+
+			// Handle other specific error cases as needed
+
+			// Default error response
+			standardErrorResponse(
+				w,
+				"internal_error",
+				"Failed to create entity",
+				err.Error(),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 
@@ -350,7 +414,13 @@ func (s *AuthzService) entityHandler(w http.ResponseWriter, r *http.Request) {
 		externalID := r.URL.Query().Get("id")
 
 		if entityType == "" || externalID == "" {
-			jsonResponse(w, EntityResponse{Error: "Type and id query parameters are required"}, http.StatusBadRequest)
+			standardErrorResponse(
+				w,
+				"missing_parameters",
+				"Missing query parameters",
+				"Type and id query parameters are required",
+				http.StatusBadRequest,
+			)
 			return
 		}
 
@@ -359,7 +429,23 @@ func (s *AuthzService) entityHandler(w http.ResponseWriter, r *http.Request) {
 
 		entity, err := s.graph.GetEntity(ctx, entityType, externalID)
 		if err != nil {
-			jsonResponse(w, EntityResponse{Error: err.Error()}, http.StatusNotFound)
+			if strings.Contains(err.Error(), "not found") {
+				standardErrorResponse(
+					w,
+					"entity_not_found",
+					"Entity not found",
+					err.Error(),
+					http.StatusNotFound,
+				)
+			} else {
+				standardErrorResponse(
+					w,
+					"internal_error",
+					"Failed to retrieve entity",
+					err.Error(),
+					http.StatusInternalServerError,
+				)
+			}
 			return
 		}
 
@@ -373,7 +459,13 @@ func (s *AuthzService) entityHandler(w http.ResponseWriter, r *http.Request) {
 		}, http.StatusOK)
 
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		standardErrorResponse(
+			w,
+			"method_not_allowed",
+			"Method not allowed",
+			fmt.Sprintf("The %s method is not supported for this endpoint", r.Method),
+			http.StatusMethodNotAllowed,
+		)
 	}
 }
 
@@ -520,6 +612,23 @@ func (s *AuthzService) permissionHandler(w http.ResponseWriter, r *http.Request)
 	}, http.StatusCreated)
 }
 
+// ErrorResponse represents a standardized error response
+type ErrorResponse struct {
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message"`
+	Details string `json:"details,omitempty"`
+}
+
+// standardErrorResponse sends a standardized error response with error code and details
+func standardErrorResponse(w http.ResponseWriter, code string, message string, details string, statusCode int) {
+	resp := ErrorResponse{
+		Code:    code,
+		Message: message,
+		Details: details,
+	}
+	jsonResponse(w, resp, statusCode)
+}
+
 // jsonResponse sends a JSON response with the specified status code
 func jsonResponse(w http.ResponseWriter, data interface{}, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
@@ -571,10 +680,31 @@ func main() {
 		addr = ":4780"
 	}
 
+	schemaPath := os.Getenv("SCHEMA_PATH")
+	if schemaPath == "" {
+		schemaPath = "./permissions/schema.perm"
+	}
+
 	// Creates and starts the service
 	service, err := NewAuthzService(connString, addr)
 	if err != nil {
 		log.Fatalf("Failed to create authorization service: %v", err)
+	}
+
+	// Load permission model from schema.perm
+	if _, err := os.Stat(schemaPath); err == nil {
+		log.Printf("Loading permission model from %s", schemaPath)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err = SyncPermissionModel(ctx, service.graph, schemaPath)
+		if err != nil {
+			log.Printf("Warning: Failed to load permission model: %v", err)
+		} else {
+			log.Printf("Successfully loaded permission model")
+		}
+	} else {
+		log.Printf("Schema file not found at %s, skipping schema load", schemaPath)
 	}
 
 	// Registers signal handlers for graceful shutdown (omitted for brevity)
@@ -583,14 +713,19 @@ func main() {
 	log.Fatal(service.Start())
 }
 
-// Helper function to check if entity exists
+// Helper function to check if an entity exists
 func (s *AuthzService) entityExists(ctx context.Context, entityType, externalID string) (bool, error) {
 	var exists bool
 	err := s.graph.Pool.QueryRow(ctx, `
-        SELECT EXISTS (
-            SELECT 1 FROM entities 
-            WHERE type = $1 AND external_id = $2
-        )
-    `, entityType, externalID).Scan(&exists)
-	return exists, err
+		SELECT EXISTS(
+			SELECT 1 FROM entities 
+			WHERE type = $1 AND external_id = $2
+		)
+	`, entityType, externalID).Scan(&exists)
+
+	if err != nil {
+		return false, fmt.Errorf("failed to check if entity exists: %w", err)
+	}
+
+	return exists, nil
 }

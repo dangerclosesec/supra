@@ -42,6 +42,13 @@ const PermissionTableVisualizer = () => {
     relations: true,
   });
   const [error, setError] = useState(null);
+  
+  // Enhanced error state
+  interface ApiError {
+    code?: string;
+    message: string;
+    details?: string;
+  }
 
   // Filtering state
   const [entityFilter, setEntityFilter] = useState("");
@@ -54,14 +61,41 @@ const PermissionTableVisualizer = () => {
     setError(null);
     try {
       const response = await fetch("/api/entity-types");
-      if (!response.ok)
-        throw new Error(`HTTP error! Status: ${response.status}`);
+      
+      if (!response.ok) {
+        // Try to parse the error as a structured API error
+        try {
+          const errorData = await response.json();
+          
+          // Check if the response matches our expected API error format
+          if (errorData.message) {
+            const apiError: ApiError = {
+              code: errorData.code || 'unknown_error',
+              message: errorData.message,
+              details: errorData.details
+            };
+            
+            throw apiError;
+          }
+        } catch (parseError) {
+          // If we can't parse the error as JSON or it doesn't match our format,
+          // fallback to generic error
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+      }
 
       const data = await response.json();
       setEntityTypes(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching entity types:", err);
-      setError(`Failed to fetch entity types: ${err.message}`);
+      
+      // Handle different error types
+      if ((err as ApiError).code) {
+        const apiErr = err as ApiError;
+        setError(`${apiErr.message}${apiErr.details ? ` - ${apiErr.details}` : ''}`);
+      } else {
+        setError(`Failed to fetch entity types: ${(err as Error).message}`);
+      }
     } finally {
       setLoading((prev) => ({ ...prev, entities: false }));
     }
@@ -146,8 +180,17 @@ const PermissionTableVisualizer = () => {
   const getExpressionHighlighted = (expr) => {
     if (!expr) return null;
 
+    // Replace comparison operators
+    const operatorsReplaced = expr
+      .replace(/ == /g, ' <span class="text-yellow-400 font-semibold">==</span> ')
+      .replace(/ != /g, ' <span class="text-yellow-400 font-semibold">!=</span> ')
+      .replace(/ > /g, ' <span class="text-yellow-400 font-semibold">></span> ')
+      .replace(/ >= /g, ' <span class="text-yellow-400 font-semibold">>=</span> ')
+      .replace(/ < /g, ' <span class="text-yellow-400 font-semibold"><</span> ')
+      .replace(/ <= /g, ' <span class="text-yellow-400 font-semibold"><=</span> ');
+
     // Replace 'and' with styled version
-    const andReplaced = expr.replace(
+    const andReplaced = operatorsReplaced.replace(
       / and /g,
       ' <span class="text-red-400 font-semibold">and</span> '
     );
@@ -158,8 +201,14 @@ const PermissionTableVisualizer = () => {
       ' <span class="text-green-400 font-semibold">or</span> '
     );
 
+    // Highlight rule calls with parameters
+    const ruleWithParamsReplaced = orReplaced.replace(
+      /([a-zA-Z_]+)\(([^)]*)\)/g,
+      '<span class="text-teal-400 font-semibold">$1</span>(<span class="text-orange-300">$2</span>)'
+    );
+
     // Highlight relation references
-    const relationReplaced = orReplaced.replace(
+    const relationReplaced = ruleWithParamsReplaced.replace(
       /([a-zA-Z_]+)\.([a-zA-Z_]+)/g,
       '<span class="text-blue-400">$1</span>.<span class="text-violet-400">$2</span>'
     );
@@ -170,9 +219,37 @@ const PermissionTableVisualizer = () => {
   return (
     <div className="flex flex-col gap-6">
       {error && (
-        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-red-400 mb-4 flex items-center gap-2">
-          <AlertCircle className="h-4 w-4" />
-          <p>{error}</p>
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-md text-red-400 mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <AlertCircle className="h-5 w-5" />
+            <p className="font-semibold">{error}</p>
+          </div>
+          <p className="pl-7 text-sm opacity-80">
+            Please try again or check the console for more details. If the issue persists, contact your administrator.
+          </p>
+          <div className="pl-7 mt-2 flex gap-2">
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="border-red-500/20 text-red-400 hover:bg-red-500/10"
+              onClick={() => setError(null)}
+            >
+              Dismiss
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="border-red-500/20 text-red-400 hover:bg-red-500/10"
+              onClick={() => {
+                fetchEntityTypes();
+                fetchPermissions();
+                fetchRelations();
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Retry
+            </Button>
+          </div>
         </div>
       )}
 
