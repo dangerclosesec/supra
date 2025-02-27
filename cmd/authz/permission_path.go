@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dangerclosesec/supra/internal/auth/graph"
+	"github.com/dangerclosesec/supra/internal/model"
 )
 
 // Permission Path Visualization API
@@ -97,6 +98,8 @@ func (s *AuthzService) addPermissionPathEndpoint(mux *http.ServeMux) {
 			Expression: conditionExpr,
 			Allowed:    allowed,
 		}
+
+		_ = s.auditLogger.LogPermissionCheck(ctx, model.Subject{req.SubjectType, req.SubjectID}, req.Permission, model.Entity{req.ObjectType, req.ObjectID}, allowed, nil, r)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)

@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/dangerclosesec/supra/internal/auth/graph"
+	"github.com/dangerclosesec/supra/internal/model"
 )
 
 // AuthzService provides HTTP endpoints for authorization decisions
 type AuthzService struct {
-	graph *graph.IdentityGraph
-	addr  string
+	graph       *graph.IdentityGraph
+	addr        string
+	auditLogger *AuthzAuditLogger
 }
 
 // NewAuthzService creates a new authorization service
@@ -30,9 +32,13 @@ func NewAuthzService(connString, addr string) (*AuthzService, error) {
 		return nil, fmt.Errorf("failed to create identity graph: %w", err)
 	}
 
+	// Initialize the audit logger
+	auditLogger := NewAuthzAuditLogger(graph.Pool)
+
 	return &AuthzService{
-		graph: graph,
-		addr:  addr,
+		graph:       graph,
+		addr:        addr,
+		auditLogger: auditLogger,
 	}, nil
 }
 
@@ -194,7 +200,11 @@ func (s *AuthzService) Start() error {
 	// Add permission path
 	s.addPermissionPathEndpoint(mux)
 
+	// Add health check endpoints
 	s.addHealthCheckEndpoints(mux)
+
+	//
+	s.addAuditLogEndpoints(mux)
 
 	// Wrap with logging middleware and CORS middleware
 	handler := corsMiddleware(logMiddleware(mux))
@@ -302,6 +312,28 @@ func (s *AuthzService) checkPermissionHandler(w http.ResponseWriter, r *http.Req
 
 	log.Printf("Permission check result: %v", allowed)
 
+	// Log the permission check
+	modelSubject := model.Subject{Type: req.SubjectType, ID: req.SubjectID}
+	modelObject := model.Entity{Type: req.ObjectType, ID: req.ObjectID}
+
+	// Log asynchronously to avoid blocking the response
+	go func() {
+		logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := s.auditLogger.LogPermissionCheck(
+			logCtx,
+			modelSubject,
+			req.Permission,
+			modelObject,
+			allowed,
+			&contextData,
+			r,
+		); err != nil {
+			log.Printf("Failed to log permission check: %v", err)
+		}
+	}()
+
 	// Returns the result
 	jsonResponse(w, CheckPermissionResponse{
 		Allowed: allowed,
@@ -398,6 +430,22 @@ func (s *AuthzService) entityHandler(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
+
+		// Log entity creation asynchronously
+		go func() {
+			logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := s.auditLogger.LogEntityCreate(
+				logCtx,
+				req.Type,
+				req.ExternalID,
+				req.Properties,
+				r,
+			); err != nil {
+				log.Printf("Failed to log entity creation: %v", err)
+			}
+		}()
 
 		jsonResponse(w, EntityResponse{
 			ID:         entity.ID,
@@ -543,6 +591,25 @@ func (s *AuthzService) relationHandler(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, map[string]string{"error": err.Error()}, http.StatusInternalServerError)
 		return
 	}
+
+	// Log relation creation asynchronously
+	go func() {
+		logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		modelSubject := model.Subject{Type: req.SubjectType, ID: req.SubjectID}
+		modelObject := model.Entity{Type: req.ObjectType, ID: req.ObjectID}
+
+		if err := s.auditLogger.LogRelationCreate(
+			logCtx,
+			modelObject,
+			req.Relation,
+			modelSubject,
+			r,
+		); err != nil {
+			log.Printf("Failed to log relation creation: %v", err)
+		}
+	}()
 
 	jsonResponse(w, RelationResponse{
 		ID:          relation.ID,

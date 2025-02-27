@@ -5,7 +5,10 @@ package auth
 import (
 	"context"
 	"fmt"
+	"net/http"
 
+	"github.com/dangerclosesec/supra/internal/audit"
+	"github.com/dangerclosesec/supra/internal/model"
 	"github.com/dangerclosesec/supra/sdk/client"
 )
 
@@ -26,9 +29,11 @@ type SupraServiceOption func(*SupraService)
 
 // SupraService handles communication with the permission service
 type SupraService struct {
-	client         *client.Client
-	tenant         string
-	schemaVersion  string
+	client        *client.Client
+	tenant        string
+	schemaVersion string
+	auditLogger   audit.Logger
+	httpRequest   *http.Request // Current HTTP request, if available
 }
 
 // WitTenant sets the tenant for the service
@@ -45,6 +50,20 @@ func WithSchemaVersion(version string) SupraServiceOption {
 	}
 }
 
+// WithAuditLogger sets the audit logger for tracking operations
+func WithAuditLogger(logger audit.Logger) SupraServiceOption {
+	return func(s *SupraService) {
+		s.auditLogger = logger
+	}
+}
+
+// WithHTTPRequest sets the current HTTP request for audit logging
+func WithHTTPRequest(req *http.Request) SupraServiceOption {
+	return func(s *SupraService) {
+		s.httpRequest = req
+	}
+}
+
 // NewSupraService creates a new SupraService instance
 func NewSupraService(host string, opts ...SupraServiceOption) (*SupraService, error) {
 	if host == "" {
@@ -57,7 +76,8 @@ func NewSupraService(host string, opts ...SupraServiceOption) (*SupraService, er
 	}
 
 	svc := &SupraService{
-		client: client.NewClient(config),
+		client:      client.NewClient(config),
+		auditLogger: &audit.NoOpLogger{}, // Default to no-op logger
 	}
 
 	// Apply options
@@ -77,6 +97,12 @@ func (s *SupraService) WriteEntityAttributes(ctx context.Context, entityType, en
 	}
 
 	_, err := s.client.CreateEntity(ctx, req)
+
+	// Log the operation
+	if err == nil {
+		_ = s.auditLogger.LogEntityCreate(ctx, entityType, entityID, attributes, s.httpRequest)
+	}
+
 	return err
 }
 
@@ -92,6 +118,14 @@ func (s *SupraService) WriteRelationship(object Entity, relation string, subject
 	}
 
 	_, err := s.client.CreateRelation(ctx, req)
+
+	// Log the operation
+	if err == nil {
+		modelObj := model.Entity{Type: object.Type, ID: object.ID}
+		modelSubj := model.Subject{Type: subject.Type, ID: subject.ID}
+		_ = s.auditLogger.LogRelationCreate(ctx, modelObj, relation, modelSubj, s.httpRequest)
+	}
+
 	return err
 }
 
@@ -106,24 +140,38 @@ func (s *SupraService) DeleteRelationship(object Entity, relation string, subjec
 		SubjectID:   subject.ID,
 	}
 
-	return s.client.DeleteRelation(ctx, req)
+	err := s.client.DeleteRelation(ctx, req)
+
+	// Log the operation
+	if err == nil {
+		modelObj := model.Entity{Type: object.Type, ID: object.ID}
+		modelSubj := model.Subject{Type: subject.Type, ID: subject.ID}
+		_ = s.auditLogger.LogRelationDelete(ctx, modelObj, relation, modelSubj, s.httpRequest)
+	}
+
+	return err
 }
 
 // CheckPermission checks if a subject has permission on an object
-func (s *SupraService) CheckPermission(ctx context.Context, subject Subject, permission string, object Entity, context map[string]interface{}) (bool, error) {
+func (s *SupraService) CheckPermission(ctx context.Context, subject Subject, permission string, object Entity, contextData map[string]interface{}) (bool, error) {
 	req := &client.CheckPermissionRequest{
 		SubjectType: subject.Type,
 		SubjectID:   subject.ID,
 		Permission:  permission,
 		ObjectType:  object.Type,
 		ObjectID:    object.ID,
-		Context:     context,
+		Context:     contextData,
 	}
 
 	resp, err := s.client.CheckPermission(ctx, req)
 	if err != nil {
 		return false, err
 	}
+
+	// Log the permission check
+	modelObj := model.Entity{Type: object.Type, ID: object.ID}
+	modelSubj := model.Subject{Type: subject.Type, ID: subject.ID}
+	_ = s.auditLogger.LogPermissionCheck(ctx, modelSubj, permission, modelObj, resp.Allowed, contextData, s.httpRequest)
 
 	return resp.Allowed, nil
 }
@@ -148,7 +196,14 @@ func (s *SupraService) TestRelationship(ctx context.Context, subject Subject, re
 
 // DeleteEntity deletes an entity from the permission system
 func (s *SupraService) DeleteEntity(ctx context.Context, entityType string, entityID string) error {
-	return s.client.DeleteEntity(ctx, entityType, entityID)
+	err := s.client.DeleteEntity(ctx, entityType, entityID)
+
+	// Log the operation
+	if err == nil {
+		_ = s.auditLogger.LogEntityDelete(ctx, entityType, entityID, s.httpRequest)
+	}
+
+	return err
 }
 
 // ListPermissionDefinitions lists all permission definitions
@@ -172,4 +227,9 @@ func (s *SupraService) CreatePermission(ctx context.Context, entityType, permiss
 // DeletePermission deletes a permission definition
 func (s *SupraService) DeletePermission(ctx context.Context, entityType, permissionName string) error {
 	return s.client.DeletePermission(ctx, entityType, permissionName)
+}
+
+// SetHTTPRequest sets the current HTTP request for audit logging
+func (s *SupraService) SetHTTPRequest(ctx context.Context, req *http.Request) {
+	s.httpRequest = req
 }

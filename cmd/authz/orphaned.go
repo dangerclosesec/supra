@@ -123,10 +123,10 @@ func (s *AuthzService) addHealthCheckEndpoints(mux *http.ServeMux) {
         `
 
 		var summary struct {
-			TotalOrphaned  int `json:"total_orphaned"`
-			BothMissing    int `json:"both_missing"`
-			SubjectMissing int `json:"subject_missing"`
-			ObjectMissing  int `json:"object_missing"`
+			TotalOrphaned  *int `json:"total_orphaned"`
+			BothMissing    *int `json:"both_missing"`
+			SubjectMissing *int `json:"subject_missing"`
+			ObjectMissing  *int `json:"object_missing"`
 		}
 
 		err = s.graph.Pool.QueryRow(ctx, summaryQuery).Scan(

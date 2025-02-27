@@ -66,6 +66,7 @@ func run() error {
 	userRepo := repository.NewUserRepository(db)
 	factorRepo := repository.NewUserFactorRepository(db)
 	orgRepo := repository.NewOrganizationRepository(db)
+	auditLogRepo := repository.NewAuthzAuditLogRepository(db)
 
 	// Initialize auth services
 	passwordHasher := auth.NewPasswordHasher()
@@ -88,9 +89,13 @@ func run() error {
 	// Initialize factor service
 	userFactorService := service.NewUserFactorService(factorRepo)
 
+	// Initialize audit log service
+	auditLogService := service.NewAuthzAuditLogService(auditLogRepo)
+
 	// Initialize permission and entity sync services
 	supraService, err := auth.NewSupraService(
 		cfg.Supra.Host,
+		auth.WithAuditLogger(auditLogService),
 	)
 	if err != nil {
 		log.Fatalf("Failed to initialize Supra service: %v", err)

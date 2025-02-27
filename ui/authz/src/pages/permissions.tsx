@@ -4,6 +4,7 @@ import Layout from "@/components/layout/Layout";
 import PermissionTableVisualizer from "@/components/PermissionTableVisualizer";
 import RelationshipCreator from "@/components/RelationshipCreator";
 import RuleVisualizer from "@/components/RuleVisualizer";
+import AuditLogViewer from "@/components/AuditLogViewer";
 import {
   Shield,
   Book,
@@ -12,8 +13,8 @@ import {
   Antenna,
   Link2,
   BookOpen,
+  ClipboardList,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
   CardContent,
@@ -74,6 +75,19 @@ export default function PermissionsPage() {
               <div className="flex items-center justify-center gap-2">
                 <Antenna className="h-4 w-4" />
                 <span>Documentation</span>
+              </div>
+            </button>
+
+            <button
+              className={classNames(
+                activeTab === "auditlogs" ? "bg-violet-500/10" : "",
+                "w-full cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium text-violet-400 outline-none"
+              )}
+              onClick={() => setActiveTab("auditlogs")}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <ClipboardList className="h-4 w-4" />
+                <span>Audit Logs</span>
               </div>
             </button>
 
@@ -141,17 +155,19 @@ export default function PermissionsPage() {
                       Access control rules defined using expressions
                     </li>
                     <li>
-                      <strong className="text-white">Rules</strong> -
-                      Reusable, parameterized checks that evaluate conditions with context data
+                      <strong className="text-white">Rules</strong> - Reusable,
+                      parameterized checks that evaluate conditions with context
+                      data
                     </li>
                     <li>
                       <strong className="text-white">Attributes</strong> -
-                      Properties of entities that can be used in permission checks
+                      Properties of entities that can be used in permission
+                      checks
                     </li>
                     <li>
                       <strong className="text-white">Expressions</strong> -
-                      Logic that defines permission rules using relations, rules, attributes and
-                      operators
+                      Logic that defines permission rules using relations,
+                      rules, attributes and operators
                     </li>
                   </ul>
                 </section>
@@ -195,7 +211,7 @@ export default function PermissionsPage() {
                       </li>
                       <li>
                         <code className="text-sm bg-orange-500/10 px-1 py-0.5 rounded text-orange-400">
-                          request.amount > 1000
+                          request.amount {`>`} 1000
                         </code>{" "}
                         - Attribute comparison with context data
                       </li>
@@ -205,6 +221,8 @@ export default function PermissionsPage() {
               </CardContent>
             </Card>
           </div>
+        ) : activeTab === "auditlogs" ? (
+          <AuditLogViewer />
         ) : (
           <RelationshipCreator />
         )}
