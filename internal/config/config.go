@@ -16,6 +16,10 @@ type Config struct {
 		SSLMode    string `json:"sslmode"`
 		SearchPath string `json:"schema"`
 	} `json:"database"`
+	Supra struct {
+		Host   string `json:"host"`
+		APIKey string `json:"api_key"`
+	} `json:"supra"`
 	JWT struct {
 		Secret       string        `json:"secret"`
 		ExpiryPeriod time.Duration `json:"expiry_period"`
@@ -50,6 +54,9 @@ func Load() *Config {
 	cfg.Database.Name = getEnv("DB_NAME", "myapp")
 	cfg.Database.SSLMode = getEnv("DB_SSLMODE", "disable")
 	cfg.Database.SearchPath = getEnv("DB_SCHEMA", "public")
+
+	// Supra host
+	cfg.Supra.Host = getEnv("SUPRA_HOST", "http://localhost:4780")
 
 	// JWT configuration
 	cfg.JWT.Secret = getEnv("JWT_SECRET", "your-secret-key")

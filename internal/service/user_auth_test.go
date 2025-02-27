@@ -97,6 +97,7 @@ func TestUserLogin(t *testing.T) {
 				CleanupFreq: time.Minute,
 			}),
 			nil,
+			nil,
 		)
 
 		// Phase 1: Password verification

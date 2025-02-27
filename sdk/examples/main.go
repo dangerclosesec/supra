@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -51,7 +52,7 @@ func runExample(ctx context.Context, c *client.Client) error {
 
 	// Step 2: Create entities
 	fmt.Println("\n2. Creating entities...")
-	
+
 	// Create a user
 	userReq := &client.CreateEntityRequest{
 		Type:       "user",
@@ -69,15 +70,15 @@ func runExample(ctx context.Context, c *client.Client) error {
 			// If entity already exists, we can continue
 			if apiErr.Code == "entity_already_exists" {
 				fmt.Printf("User already exists: %s:%s (continuing with existing user)\n", userReq.Type, userReq.ExternalID)
-				
+
 				// Fetch the existing user
-				user, fetchErr := c.GetEntity(ctx, userReq.Type, userReq.ExternalID)
+				_, fetchErr := c.GetEntity(ctx, userReq.Type, userReq.ExternalID)
 				if fetchErr != nil {
 					return fmt.Errorf("failed to fetch existing user: %w", fetchErr)
 				}
 			} else {
 				// For other API errors, return detailed information
-				return fmt.Errorf("API error creating user: [%s] %s - %s", 
+				return fmt.Errorf("API error creating user: [%s] %s - %s",
 					apiErr.Code, apiErr.Message, apiErr.Details)
 			}
 		} else {
@@ -106,15 +107,15 @@ func runExample(ctx context.Context, c *client.Client) error {
 			// If entity already exists, we can continue
 			if apiErr.Code == "entity_already_exists" {
 				fmt.Printf("Document already exists: %s:%s (continuing with existing document)\n", docReq.Type, docReq.ExternalID)
-				
+
 				// Fetch the existing document
-				doc, fetchErr := c.GetEntity(ctx, docReq.Type, docReq.ExternalID)
+				_, fetchErr := c.GetEntity(ctx, docReq.Type, docReq.ExternalID)
 				if fetchErr != nil {
 					return fmt.Errorf("failed to fetch existing document: %w", fetchErr)
 				}
 			} else {
 				// For other API errors, return detailed information
-				return fmt.Errorf("API error creating document: [%s] %s - %s", 
+				return fmt.Errorf("API error creating document: [%s] %s - %s",
 					apiErr.Code, apiErr.Message, apiErr.Details)
 			}
 		} else {
@@ -127,7 +128,7 @@ func runExample(ctx context.Context, c *client.Client) error {
 
 	// Step 3: Create relations
 	fmt.Println("\n3. Creating relations...")
-	
+
 	// Make user the owner of the document
 	relReq := &client.CreateRelationRequest{
 		SubjectType: "user",
@@ -161,7 +162,7 @@ func runExample(ctx context.Context, c *client.Client) error {
 
 	// Step 5: Check permissions
 	fmt.Println("\n5. Checking permissions...")
-	
+
 	// Check if Alice can read the document
 	checkReq := &client.CheckPermissionRequest{
 		SubjectType: "user",
@@ -184,7 +185,7 @@ func runExample(ctx context.Context, c *client.Client) error {
 	if err != nil {
 		return fmt.Errorf("failed to list rule definitions: %w", err)
 	}
-	
+
 	ruleExists := false
 	for _, rule := range ruleDefs {
 		if rule.Name == "isDocumentOwner" {
@@ -192,7 +193,7 @@ func runExample(ctx context.Context, c *client.Client) error {
 			break
 		}
 	}
-	
+
 	if !ruleExists {
 		// Note: In a real application, you'd need a way to create rules or sync them from a schema file
 		fmt.Println("Rule 'isDocumentOwner' doesn't exist. In a real application, you'd create it here.")
@@ -202,7 +203,7 @@ func runExample(ctx context.Context, c *client.Client) error {
 		testRuleReq := &client.TestRuleRequest{
 			RuleName: "isDocumentOwner",
 			Parameters: map[string]interface{}{
-				"user_id":    "alice",
+				"user_id":     "alice",
 				"document_id": "doc1",
 			},
 		}
@@ -219,7 +220,7 @@ func runExample(ctx context.Context, c *client.Client) error {
 	if err != nil {
 		return fmt.Errorf("failed to list permission definitions: %w", err)
 	}
-	
+
 	fmt.Printf("Found %d permission definitions:\n", len(permissions))
 	for _, p := range permissions {
 		fmt.Printf("- %s.%s: %s\n", p.EntityType, p.PermissionName, p.ConditionExpression)

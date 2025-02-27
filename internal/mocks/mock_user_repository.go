@@ -158,6 +158,85 @@ func (c *MockUserRepositoryIfaceDeleteCall) DoAndReturn(f func(context.Context, 
 	return c
 }
 
+// FindAll mocks base method.
+func (m *MockUserRepositoryIface) FindAll(ctx context.Context) ([]*model.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindAll", ctx)
+	ret0, _ := ret[0].([]*model.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindAll indicates an expected call of FindAll.
+func (mr *MockUserRepositoryIfaceMockRecorder) FindAll(ctx any) *MockUserRepositoryIfaceFindAllCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAll", reflect.TypeOf((*MockUserRepositoryIface)(nil).FindAll), ctx)
+	return &MockUserRepositoryIfaceFindAllCall{Call: call}
+}
+
+// MockUserRepositoryIfaceFindAllCall wrap *gomock.Call
+type MockUserRepositoryIfaceFindAllCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockUserRepositoryIfaceFindAllCall) Return(arg0 []*model.User, arg1 error) *MockUserRepositoryIfaceFindAllCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockUserRepositoryIfaceFindAllCall) Do(f func(context.Context) ([]*model.User, error)) *MockUserRepositoryIfaceFindAllCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockUserRepositoryIfaceFindAllCall) DoAndReturn(f func(context.Context) ([]*model.User, error)) *MockUserRepositoryIfaceFindAllCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// FindAllPaginated mocks base method.
+func (m *MockUserRepositoryIface) FindAllPaginated(ctx context.Context, offset, limit int) ([]*model.User, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindAllPaginated", ctx, offset, limit)
+	ret0, _ := ret[0].([]*model.User)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// FindAllPaginated indicates an expected call of FindAllPaginated.
+func (mr *MockUserRepositoryIfaceMockRecorder) FindAllPaginated(ctx, offset, limit any) *MockUserRepositoryIfaceFindAllPaginatedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindAllPaginated", reflect.TypeOf((*MockUserRepositoryIface)(nil).FindAllPaginated), ctx, offset, limit)
+	return &MockUserRepositoryIfaceFindAllPaginatedCall{Call: call}
+}
+
+// MockUserRepositoryIfaceFindAllPaginatedCall wrap *gomock.Call
+type MockUserRepositoryIfaceFindAllPaginatedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockUserRepositoryIfaceFindAllPaginatedCall) Return(arg0 []*model.User, arg1 int64, arg2 error) *MockUserRepositoryIfaceFindAllPaginatedCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockUserRepositoryIfaceFindAllPaginatedCall) Do(f func(context.Context, int, int) ([]*model.User, int64, error)) *MockUserRepositoryIfaceFindAllPaginatedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockUserRepositoryIfaceFindAllPaginatedCall) DoAndReturn(f func(context.Context, int, int) ([]*model.User, int64, error)) *MockUserRepositoryIfaceFindAllPaginatedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // FindByEmail mocks base method.
 func (m *MockUserRepositoryIface) FindByEmail(ctx context.Context, email string) (*model.User, error) {
 	m.ctrl.T.Helper()

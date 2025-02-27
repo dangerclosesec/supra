@@ -367,12 +367,12 @@ type ListRuleDefinitionsResponse struct {
 
 // RuleDefinition represents a rule definition
 type RuleDefinition struct {
-	ID          int64                `json:"id"`
-	Name        string               `json:"name"`
+	ID          int64                 `json:"id"`
+	Name        string                `json:"name"`
 	Parameters  []ParameterDefinition `json:"parameters"`
-	Expression  string               `json:"expression"`
-	Description string               `json:"description,omitempty"`
-	CreatedAt   string               `json:"created_at,omitempty"`
+	Expression  string                `json:"expression"`
+	Description string                `json:"description,omitempty"`
+	CreatedAt   string                `json:"created_at,omitempty"`
 }
 
 // ParameterDefinition represents a parameter in a rule
@@ -391,6 +391,68 @@ func (c *Client) ListRuleDefinitions(ctx context.Context) ([]RuleDefinition, err
 	}
 
 	return resp, nil
+}
+
+// DeleteEntityRequest represents an entity deletion request
+type DeleteEntityRequest struct {
+	Type       string `json:"type"`
+	ExternalID string `json:"external_id"`
+}
+
+// DeleteEntity deletes an entity by type and external ID
+func (c *Client) DeleteEntity(ctx context.Context, entityType, externalID string) error {
+	if entityType == "" || externalID == "" {
+		return errors.New("entity_type and external_id are required")
+	}
+
+	endpoint := fmt.Sprintf("%s/entity?type=%s&id=%s", c.config.BaseURL, entityType, externalID)
+	return c.delete(ctx, endpoint)
+}
+
+// DeleteRelationRequest represents a relation deletion request
+type DeleteRelationRequest struct {
+	SubjectType string `json:"subject_type"`
+	SubjectID   string `json:"subject_id"`
+	Relation    string `json:"relation"`
+	ObjectType  string `json:"object_type"`
+	ObjectID    string `json:"object_id"`
+}
+
+// DeleteRelation deletes a relation between entities
+func (c *Client) DeleteRelation(ctx context.Context, req *DeleteRelationRequest) error {
+	if req == nil {
+		return errors.New("request cannot be nil")
+	}
+
+	// Validate required fields
+	if req.SubjectType == "" || req.SubjectID == "" || req.Relation == "" ||
+		req.ObjectType == "" || req.ObjectID == "" {
+		return errors.New("subject_type, subject_id, relation, object_type, and object_id are required")
+	}
+
+	// Construct query parameters
+	endpoint := fmt.Sprintf("%s/relation?subject_type=%s&subject_id=%s&relation=%s&object_type=%s&object_id=%s",
+		c.config.BaseURL, req.SubjectType, req.SubjectID, req.Relation, req.ObjectType, req.ObjectID)
+
+	return c.delete(ctx, endpoint)
+}
+
+// DeletePermissionRequest represents a permission deletion request
+type DeletePermissionRequest struct {
+	EntityType     string `json:"entity_type"`
+	PermissionName string `json:"permission_name"`
+}
+
+// DeletePermission deletes a permission definition
+func (c *Client) DeletePermission(ctx context.Context, entityType, permissionName string) error {
+	if entityType == "" || permissionName == "" {
+		return errors.New("entity_type and permission_name are required")
+	}
+
+	endpoint := fmt.Sprintf("%s/permission?entity_type=%s&permission_name=%s", 
+		c.config.BaseURL, entityType, permissionName)
+	
+	return c.delete(ctx, endpoint)
 }
 
 // doRequest performs a POST request to the specified endpoint with the given request and unmarshals the response into a CheckPermissionResponse
@@ -418,7 +480,7 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	if e.Code != "" {
-		return fmt.Sprintf("[%s] %s (Status: %d)", e.Code, e.Message, e.StatusCode) 
+		return fmt.Sprintf("[%s] %s (Status: %d)", e.Code, e.Message, e.StatusCode)
 	}
 	return fmt.Sprintf("%s (Status: %d)", e.Message, e.StatusCode)
 }
@@ -463,7 +525,7 @@ func (c *Client) post(ctx context.Context, endpoint string, req interface{}, res
 				Message:    fmt.Sprintf("request failed with status code %d", httpResp.StatusCode),
 			}
 		}
-		
+
 		apiErr.StatusCode = httpResp.StatusCode
 		return &apiErr
 	}
@@ -510,7 +572,7 @@ func (c *Client) get(ctx context.Context, endpoint string, resp interface{}) err
 				Message:    fmt.Sprintf("request failed with status code %d", httpResp.StatusCode),
 			}
 		}
-		
+
 		apiErr.StatusCode = httpResp.StatusCode
 		return &apiErr
 	}
@@ -518,6 +580,47 @@ func (c *Client) get(ctx context.Context, endpoint string, resp interface{}) err
 	// Decode response
 	if err := json.NewDecoder(httpResp.Body).Decode(resp); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return nil
+}
+
+// delete performs a DELETE request to the specified endpoint
+func (c *Client) delete(ctx context.Context, endpoint string) error {
+	// Set up context with timeout
+	if c.config.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.config.Timeout)
+		defer cancel()
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Send request
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	// Check for non-success status code
+	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+		// Try to decode error response
+		var apiErr APIError
+		if err := json.NewDecoder(httpResp.Body).Decode(&apiErr); err != nil {
+			// If we can't decode the error, create a generic one
+			return &APIError{
+				StatusCode: httpResp.StatusCode,
+				Message:    fmt.Sprintf("request failed with status code %d", httpResp.StatusCode),
+			}
+		}
+
+		apiErr.StatusCode = httpResp.StatusCode
+		return &apiErr
 	}
 
 	return nil

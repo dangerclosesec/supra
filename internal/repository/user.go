@@ -19,6 +19,8 @@ type UserRepositoryIface interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	Update(ctx context.Context, user *model.User) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	FindAll(ctx context.Context) ([]*model.User, error)                                    // Get all users
+	FindAllPaginated(ctx context.Context, offset, limit int) ([]*model.User, int64, error) // Get users with pagination
 }
 
 type UserRepository struct {
@@ -103,4 +105,33 @@ func (r *UserRepository) FindByOrganization(ctx context.Context, orgID uuid.UUID
 		return nil, fmt.Errorf("failed to find users: %w", result.Error)
 	}
 	return users, nil
+}
+
+// FindAll returns all users
+func (r *UserRepository) FindAll(ctx context.Context) ([]*model.User, error) {
+	var users []*model.User
+	result := r.db.WithContext(ctx).Find(&users)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to find all users: %w", result.Error)
+	}
+	return users, nil
+}
+
+// FindAllPaginated returns a paginated list of users
+func (r *UserRepository) FindAllPaginated(ctx context.Context, offset, limit int) ([]*model.User, int64, error) {
+	var users []*model.User
+	var count int64
+
+	// Get total count
+	if err := r.db.WithContext(ctx).Model(&model.User{}).Count(&count).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count users: %w", err)
+	}
+
+	// Get paginated users
+	result := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&users)
+	if result.Error != nil {
+		return nil, 0, fmt.Errorf("failed to find paginated users: %w", result.Error)
+	}
+
+	return users, count, nil
 }

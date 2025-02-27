@@ -30,6 +30,7 @@ type UserService struct {
 	emailService   *email.Service
 	factorService  *UserFactorService
 	cacheService   *CacheService
+	entitySync     *EntitySyncService
 	config         *config.Config
 	validate       *validator.Validate
 }
@@ -43,6 +44,7 @@ func NewUserService(
 	emailService *email.Service,
 	factorService *UserFactorService,
 	cacheService *CacheService,
+	entitySync *EntitySyncService,
 	config *config.Config,
 ) *UserService {
 	return &UserService{
@@ -54,6 +56,7 @@ func NewUserService(
 		emailService:   emailService,
 		factorService:  factorService,
 		cacheService:   cacheService,
+		entitySync:     entitySync,
 		config:         config,
 		validate:       validator.New(),
 	}
@@ -230,6 +233,24 @@ func (s *UserService) Signup(ctx context.Context, input SignupInput) (*SignupOut
 	if err := s.orgRepo.CreateOrganizationUser(ctx, orgUser); err != nil {
 		return nil, fmt.Errorf("creating organization user: %w", err)
 	}
+	
+	// Sync entities and relationships to permission system
+	if s.entitySync != nil {
+		// Sync user entity and attributes
+		if err := s.entitySync.SyncUserToPermissions(ctx, user); err != nil {
+			return nil, fmt.Errorf("syncing user to permission system: %w", err)
+		}
+		
+		// Sync organization entity and attributes
+		if err := s.entitySync.SyncOrganizationToPermissions(ctx, org); err != nil {
+			return nil, fmt.Errorf("syncing organization to permission system: %w", err)
+		}
+		
+		// Establish ownership relationship
+		if err := s.entitySync.EstablishUserOrganizationRelation(ctx, org.ID, user.ID, "owner"); err != nil {
+			return nil, fmt.Errorf("establishing owner relationship: %w", err)
+		}
+	}
 
 	// Generate verification URL
 	verificationLink := fmt.Sprintf(
@@ -307,6 +328,15 @@ func (s *UserService) VerifyEmail(ctx context.Context, input VerifyInput) error 
 	user.Status = model.StatusActive
 	if err := s.repo.Update(ctx, user); err != nil {
 		return fmt.Errorf("updating user: %w", err)
+	}
+	
+	// Sync updated user status to permission system
+	if s.entitySync != nil {
+		if err := s.entitySync.SyncUserToPermissions(ctx, user); err != nil {
+			// Log but don't fail the verification if sync fails
+			// We can recover from this through background reconciliation
+			fmt.Printf("Warning: Failed to sync verified user status to permission system: %v\n", err)
+		}
 	}
 
 	// Update factor

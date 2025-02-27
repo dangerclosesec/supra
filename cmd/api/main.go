@@ -88,6 +88,28 @@ func run() error {
 	// Initialize factor service
 	userFactorService := service.NewUserFactorService(factorRepo)
 
+	// Initialize permission and entity sync services
+	supraService, err := auth.NewSupraService(
+		cfg.Supra.Host,
+	)
+	if err != nil {
+		log.Fatalf("Failed to initialize Supra service: %v", err)
+	}
+
+	// Initialize entity sync service
+	entitySyncService := service.NewEntitySyncService(supraService)
+
+	// Initialize and start reconciliation service
+	reconciliationService := service.NewEntityReconciliationService(
+		userRepo,
+		orgRepo,
+		entitySyncService,
+		60*time.Minute, // Run reconciliation every hour
+		logger,
+	)
+	reconciliationService.Start()
+	defer reconciliationService.Stop()
+
 	// Initialize user service
 	userService := service.NewUserService(
 		userRepo,
@@ -98,6 +120,7 @@ func run() error {
 		emailService,
 		userFactorService,
 		cacheService,
+		entitySyncService,
 		cfg,
 	)
 

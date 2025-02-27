@@ -20,6 +20,45 @@ func NewOrganizationRepository(db *gorm.DB) *OrganizationRepository {
 	return &OrganizationRepository{db: db}
 }
 
+// FindAll returns all organizations
+func (r *OrganizationRepository) FindAll(ctx context.Context) ([]*model.Organization, error) {
+	var orgs []*model.Organization
+	result := r.db.WithContext(ctx).Find(&orgs)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to find all organizations: %w", result.Error)
+	}
+	return orgs, nil
+}
+
+// FindAllPaginated returns a paginated list of organizations
+func (r *OrganizationRepository) FindAllPaginated(ctx context.Context, offset, limit int) ([]*model.Organization, int64, error) {
+	var orgs []*model.Organization
+	var count int64
+	
+	// Get total count
+	if err := r.db.WithContext(ctx).Model(&model.Organization{}).Count(&count).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count organizations: %w", err)
+	}
+	
+	// Get paginated organizations
+	result := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&orgs)
+	if result.Error != nil {
+		return nil, 0, fmt.Errorf("failed to find paginated organizations: %w", result.Error)
+	}
+	
+	return orgs, count, nil
+}
+
+// FindOrganizationUsers returns all users belonging to the given organization
+func (r *OrganizationRepository) FindOrganizationUsers(ctx context.Context, orgID uuid.UUID) ([]*model.OrganizationUser, error) {
+	var orgUsers []*model.OrganizationUser
+	result := r.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&orgUsers)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to find organization users: %w", result.Error)
+	}
+	return orgUsers, nil
+}
+
 func (r *OrganizationRepository) Create(ctx context.Context, org *model.Organization) error {
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Check if user already has a personal organization if this is a personal org
